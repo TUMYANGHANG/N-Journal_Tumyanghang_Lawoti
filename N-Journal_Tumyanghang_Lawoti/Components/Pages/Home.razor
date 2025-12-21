@@ -1,0 +1,38 @@
+﻿@page "/"
+@inject AuthService AuthService
+@inject NavigationManager Navigation
+
+<PageTitle>Home - N-Journal</PageTitle>
+
+@if (!AuthService.IsAuthenticated)
+{
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-md-8 text-center">
+                <h1 class="display-4 mb-4">Welcome to N-Journal</h1>
+                <p class="lead mb-4">Your personal journaling companion for tracking your daily thoughts, moods, and experiences.</p>
+                <div class="d-grid gap-2 d-md-flex justify-content-md-center">
+                    <a href="/login" class="btn btn-primary btn-lg me-md-2">Login</a>
+                    <a href="/register" class="btn btn-outline-primary btn-lg">Register</a>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-12">
+                <h1 class="mb-4">Welcome back, @AuthService.CurrentUser?.Username!</h1>
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Your Journal Dashboard</h5>
+                        <p class="card-text">Start journaling by creating your first entry today.</p>
+                        <p class="text-muted">More features coming soon...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}

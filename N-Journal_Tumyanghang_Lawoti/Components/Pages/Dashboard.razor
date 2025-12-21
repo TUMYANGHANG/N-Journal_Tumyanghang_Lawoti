@@ -1,0 +1,26 @@
+@page "/dashboard"
+@inject AuthService AuthService
+@inject NavigationManager Navigation
+
+<PageTitle>Dashboard - N-Journal</PageTitle>
+
+@if (!AuthService.IsAuthenticated)
+{
+    <RedirectToLogin />
+}
+else
+{
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-12">
+                <h1 class="mb-4">Dashboard & Analytics</h1>
+                <div class="card">
+                    <div class="card-body">
+                        <p class="card-text">Dashboard analytics coming soon...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
