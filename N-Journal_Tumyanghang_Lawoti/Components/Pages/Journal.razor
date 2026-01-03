@@ -257,7 +257,14 @@ else
                                     <div class="mt-2">
                                         <small class="text-muted">@entry.WordCount words</small>
                                         <div class="float-end">
-                                            <button class="btn btn-sm btn-primary" @onclick="() => EditEntry(entry)">Edit</button>
+                                            <button class="btn btn-sm btn-primary me-2" @onclick="() => EditEntry(entry)">Edit</button>
+                                            <button class="btn btn-sm btn-danger" @onclick="() => DeleteEntry(entry)" disabled="@isDeleting">
+                                                @if (isDeleting && deletingEntryId == entry.Id)
+                                                {
+                                                    <span class="spinner-border spinner-border-sm me-1"></span>
+                                                }
+                                                Delete
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
@@ -332,6 +339,8 @@ else
     private bool showEditor = false;
     private bool showPinPrompt = false;
     private bool isSaving = false;
+    private bool isDeleting = false;
+    private int? deletingEntryId = null;
     private DateTime selectedDate = DateTime.Today;
     private int currentPage = 1;
     private int pageSize = 10;
@@ -609,6 +618,44 @@ else
             await JournalService.DeleteEntryAsync(currentEntry.Id, AuthService.CurrentUser.Id);
             showEditor = false;
             await LoadEntries();
+        }
+    }
+
+    private async Task DeleteEntry(JournalEntry entry)
+    {
+        if (AuthService.CurrentUser == null) return;
+
+        if (!await JSRuntime.InvokeAsync<bool>("confirm", $"Are you sure you want to delete the entry '{entry.Title}'? This action cannot be undone."))
+        {
+            return;
+        }
+
+        isDeleting = true;
+        deletingEntryId = entry.Id;
+        StateHasChanged();
+
+        try
+        {
+            var success = await JournalService.DeleteEntryAsync(entry.Id, AuthService.CurrentUser.Id);
+            if (success)
+            {
+                await LoadEntries();
+            }
+            else
+            {
+                await JSRuntime.InvokeVoidAsync("alert", "Failed to delete entry. Please try again.");
+            }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Error deleting entry: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"Error deleting entry: {ex.Message}");
+        }
+        finally
+        {
+            isDeleting = false;
+            deletingEntryId = null;
+            StateHasChanged();
         }
     }
 
