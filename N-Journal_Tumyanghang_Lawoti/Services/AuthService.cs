@@ -41,6 +41,9 @@ public class AuthService
     {
         try
         {
+            // Ensure database is initialized
+            await _context.Database.EnsureCreatedAsync();
+
             // Check if username or email already exists
             if (await _context.Users.AnyAsync(u => u.Username == username || u.Email == email))
             {
@@ -64,8 +67,10 @@ public class AuthService
 
             return true;
         }
-        catch
+        catch (Exception ex)
         {
+            System.Diagnostics.Debug.WriteLine($"Registration error: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
             return false;
         }
     }

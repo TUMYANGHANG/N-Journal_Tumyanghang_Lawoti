@@ -1,12 +1,24 @@
 @page "/login"
 @inject AuthService AuthService
 @inject NavigationManager Navigation
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Web
 
 <PageTitle>Login - N-Journal</PageTitle>
 
 @if (AuthService.IsAuthenticated)
 {
     <RedirectToHome />
+}
+
+@if (showSuccessMessage)
+{
+    <div class="container mt-3">
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            Registration successful! Please login with your credentials.
+            <button type="button" class="btn-close" @onclick="() => showSuccessMessage = false"></button>
+        </div>
+    </div>
 }
 
 <div class="container mt-5">
@@ -57,9 +69,22 @@
 </div>
 
 @code {
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string? Registered { get; set; }
+
     private LoginModel loginModel = new();
     private string? errorMessage;
     private bool isLoading = false;
+    private bool showSuccessMessage = false;
+
+    protected override void OnInitialized()
+    {
+        if (Registered == "true")
+        {
+            showSuccessMessage = true;
+        }
+    }
 
     private class LoginModel
     {

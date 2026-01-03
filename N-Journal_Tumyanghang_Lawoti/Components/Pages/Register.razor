@@ -114,16 +114,18 @@
 
             if (success)
             {
-                Navigation.NavigateTo("/login");
+                errorMessage = null;
+                Navigation.NavigateTo("/login?registered=true");
             }
             else
             {
-                errorMessage = "Registration failed. Username or email may already be in use.";
+                errorMessage = "Registration failed. Username or email may already be in use, or there was a database error. Please try again.";
             }
         }
         catch (Exception ex)
         {
-            errorMessage = $"An error occurred: {ex.Message}";
+            errorMessage = $"An error occurred during registration: {ex.Message}. Please check your connection and try again.";
+            System.Diagnostics.Debug.WriteLine($"Registration exception: {ex}");
         }
         finally
         {

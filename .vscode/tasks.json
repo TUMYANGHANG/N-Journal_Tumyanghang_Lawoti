@@ -1,0 +1,13 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Run Windows App",
+			"type": "shell",
+			"command": "dotnet run --framework net9.0-windows10.0.19041.0",
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		}
+	]
+}
