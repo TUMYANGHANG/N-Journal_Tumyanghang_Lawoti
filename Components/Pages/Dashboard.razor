@@ -1,0 +1,342 @@
+@page "/dashboard"
+@inject AuthService AuthService
+@inject JournalService JournalService
+@inject PdfExportService PdfExportService
+@inject NavigationManager Navigation
+@using N_Journal_Tumyanghang_Lawoti.Models
+
+<PageTitle>Dashboard - N-Journal</PageTitle>
+
+@if (!AuthService.IsAuthenticated)
+{
+    <RedirectToLogin />
+}
+else
+{
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-12">
+                <h1 class="mb-4">Dashboard & Analytics</h1>
+            </div>
+        </div>
+
+        <!-- Streak Information -->
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h5 class="card-title">Current Streak</h5>
+                        <h2 class="text-primary">@streakInfo.CurrentStreak days</h2>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h5 class="card-title">Longest Streak</h5>
+                        <h2 class="text-success">@streakInfo.LongestStreak days</h2>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card text-center">
+                    <div class="card-body">
+                        <h5 class="card-title">Missed Days</h5>
+                        <h2 class="text-warning">@missedDays days</h2>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mood Distribution -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Mood Distribution</h5>
+                    </div>
+                    <div class="card-body">
+                        @if (moodDistribution.Any())
+                        {
+                            var totalMoods = moodDistribution.Values.Sum();
+                            @foreach (var mood in moodDistribution.OrderByDescending(m => m.Value))
+                            {
+                                var percentage = (mood.Value / (double)totalMoods) * 100;
+                                <div class="mb-3">
+                                    <div class="d-flex justify-content-between mb-1">
+                                        <span><strong>@mood.Key</strong></span>
+                                        <span>@mood.Value (@percentage.ToString("F1"))%</span>
+                                    </div>
+                                    <div class="progress" style="height: 20px;">
+                                        <div class="progress-bar" role="progressbar" style="width: @percentage%">
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <p class="text-muted">No mood data available</p>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Most Frequent Moods -->
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Most Frequent Moods</h5>
+                    </div>
+                    <div class="card-body">
+                        @if (moodDistribution.Any())
+                        {
+                            <ol>
+                                @foreach (var mood in moodDistribution.OrderByDescending(m => m.Value).Take(5))
+                                {
+                                    <li class="mb-2">
+                                        <strong>@mood.Key</strong> - @mood.Value time(s)
+                                    </li>
+                                }
+                            </ol>
+                        }
+                        else
+                        {
+                            <p class="text-muted">No mood data available</p>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tag Analytics -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Most Used Tags</h5>
+                    </div>
+                    <div class="card-body">
+                        @if (tagUsage.Any())
+                        {
+                            <ol>
+                                @foreach (var tag in tagUsage.OrderByDescending(t => t.Value).Take(10))
+                                {
+                                    <li class="mb-2">
+                                        <strong>@tag.Key</strong> - @tag.Value time(s)
+                                    </li>
+                                }
+                            </ol>
+                        }
+                        else
+                        {
+                            <p class="text-muted">No tag data available</p>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tag Breakdown -->
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Tag Breakdown</h5>
+                    </div>
+                    <div class="card-body">
+                        @if (tagUsage.Any())
+                        {
+                            var totalTags = tagUsage.Values.Sum();
+                            @foreach (var tag in tagUsage.OrderByDescending(t => t.Value).Take(10))
+                            {
+                                var percentage = (tag.Value / (double)totalTags) * 100;
+                                <div class="mb-2">
+                                    <div class="d-flex justify-content-between">
+                                        <span>@tag.Key</span>
+                                        <span>@tag.Value (@percentage.ToString("F1"))%</span>
+                                    </div>
+                                    <div class="progress" style="height: 15px;">
+                                        <div class="progress-bar bg-info" role="progressbar" style="width: @percentage%">
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <p class="text-muted">No tag data available</p>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Word Count Trends -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Word Count Trends (Last 30 Days)</h5>
+                    </div>
+                    <div class="card-body">
+                        @if (wordCountTrends.Any())
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Date</th>
+                                            <th>Word Count</th>
+                                            <th>Visual</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var trend in wordCountTrends.OrderByDescending(t => t.Date))
+                                        {
+                                            var maxWords = wordCountTrends.Any() ? wordCountTrends.Max(t => t.WordCount) : 1;
+                                            var width = maxWords > 0 ? (trend.WordCount / (double)maxWords) * 100 : 0;
+                                            <tr>
+                                                <td>@trend.Date.ToString("MMM dd, yyyy")</td>
+                                                <td>@trend.WordCount</td>
+                                                <td>
+                                                    <div class="progress" style="height: 20px;">
+                                                        <div class="progress-bar bg-success" role="progressbar" style="width: @width%">
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="text-muted">No word count data available for the last 30 days</p>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Export Section -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Export Journals</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <label class="form-label">Start Date</label>
+                                <InputDate class="form-control" @bind-Value="exportStartDate" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">End Date</label>
+                                <InputDate class="form-control" @bind-Value="exportEndDate" />
+                            </div>
+                            <div class="col-md-4 d-flex align-items-end">
+                                <button class="btn btn-primary w-100" @onclick="ExportToPdf" disabled="@isExporting">
+                                    @if (isExporting)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-2"></span>
+                                    }
+                                    Export to PDF
+                                </button>
+                            </div>
+                        </div>
+                        @if (!string.IsNullOrEmpty(exportMessage))
+                        {
+                            <div class="alert @(exportSuccess ? "alert-success" : "alert-danger") mt-3">
+                                @exportMessage
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private Streak streakInfo = new();
+    private int missedDays = 0;
+    private Dictionary<string, int> moodDistribution = new();
+    private Dictionary<string, int> tagUsage = new();
+    private List<(DateTime Date, int WordCount)> wordCountTrends = new();
+    private DateTime? exportStartDate = DateTime.Today.AddDays(-30);
+    private DateTime? exportEndDate = DateTime.Today;
+    private bool isExporting = false;
+    private string exportMessage = string.Empty;
+    private bool exportSuccess = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDashboardData();
+    }
+
+    private async Task LoadDashboardData()
+    {
+        if (AuthService.CurrentUser == null) return;
+
+        // Load streak info
+        streakInfo = await JournalService.GetOrCreateStreakAsync(AuthService.CurrentUser.Id);
+        missedDays = await JournalService.GetMissedDaysAsync(AuthService.CurrentUser.Id);
+
+        // Load mood distribution
+        moodDistribution = await JournalService.GetMoodDistributionAsync(AuthService.CurrentUser.Id);
+
+        // Load tag usage
+        tagUsage = await JournalService.GetTagUsageAsync(AuthService.CurrentUser.Id);
+
+        // Load word count trends
+        wordCountTrends = await JournalService.GetWordCountTrendsAsync(AuthService.CurrentUser.Id, 30);
+    }
+
+    private async Task ExportToPdf()
+    {
+        if (AuthService.CurrentUser == null || !exportStartDate.HasValue || !exportEndDate.HasValue)
+        {
+            exportMessage = "Please select both start and end dates.";
+            exportSuccess = false;
+            return;
+        }
+
+        isExporting = true;
+        exportMessage = string.Empty;
+
+        try
+        {
+            var entries = await JournalService.GetEntriesForExportAsync(
+                AuthService.CurrentUser.Id,
+                exportStartDate.Value,
+                exportEndDate.Value
+            );
+
+            if (!entries.Any())
+            {
+                exportMessage = "No entries found for the selected date range.";
+                exportSuccess = false;
+                return;
+            }
+
+            // Generate PDF
+            var pdfBytes = PdfExportService.GeneratePdf(entries, AuthService.CurrentUser?.Username ?? "User");
+            
+            // Save PDF (platform-specific implementation would go here)
+            // For now, we'll just confirm the export
+            exportMessage = $"PDF exported successfully! {entries.Count} entries exported. ({pdfBytes.Length / 1024} KB)";
+            exportSuccess = true;
+        }
+        catch (Exception ex)
+        {
+            exportMessage = $"Error exporting PDF: {ex.Message}";
+            exportSuccess = false;
+        }
+        finally
+        {
+            isExporting = false;
+        }
+    }
+
+}

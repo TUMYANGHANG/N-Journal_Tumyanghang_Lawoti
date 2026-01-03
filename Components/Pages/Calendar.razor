@@ -1,0 +1,352 @@
+@page "/calendar"
+@inject AuthService AuthService
+@inject JournalService JournalService
+@inject NavigationManager Navigation
+@using N_Journal_Tumyanghang_Lawoti.Models
+
+<PageTitle>Calendar - N-Journal</PageTitle>
+
+@if (!AuthService.IsAuthenticated)
+{
+    <RedirectToLogin />
+}
+else
+{
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h1>Calendar View</h1>
+                    <div>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="PreviousMonth">← Previous</button>
+                        <span class="mx-3"><strong>@currentMonth.ToString("MMMM yyyy")</strong></span>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="NextMonth">Next →</button>
+                        <button class="btn btn-sm btn-primary ms-3" @onclick="GoToToday">Today</button>
+                    </div>
+                </div>
+
+                @if (isLoading)
+                {
+                    <div class="card">
+                        <div class="card-body text-center">
+                            <div class="spinner-border" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p class="mt-2">Loading calendar...</p>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="calendar-grid">
+                                <!-- Day headers -->
+                                <div class="calendar-row calendar-header">
+                                    <div class="calendar-cell">Sun</div>
+                                    <div class="calendar-cell">Mon</div>
+                                    <div class="calendar-cell">Tue</div>
+                                    <div class="calendar-cell">Wed</div>
+                                    <div class="calendar-cell">Thu</div>
+                                    <div class="calendar-cell">Fri</div>
+                                    <div class="calendar-cell">Sat</div>
+                                </div>
+
+                                <!-- Calendar days -->
+                                @if (calendarWeeks.Any())
+                                {
+                                    @foreach (var week in calendarWeeks)
+                                    {
+                                        <div class="calendar-row">
+                                            @foreach (var day in week)
+                                            {
+                                                <div class="calendar-cell @GetDayClass(day)" @onclick="() => SelectDate(day)">
+                                                    <div class="day-number">@day.Day</div>
+                                                    @if (HasEntry(day))
+                                                    {
+                                                        <div class="entry-indicator" title="@GetEntryTitle(day)"></div>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                }
+                                else
+                                {
+                                    <div class="col-12 text-center p-4">
+                                        <p>No calendar data available</p>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+
+                @if (selectedDate.HasValue)
+                {
+                    <div class="card mt-4">
+                        <div class="card-header">
+                            <h5>@selectedDate.Value.ToString("MMMM dd, yyyy")</h5>
+                        </div>
+                        <div class="card-body">
+                            @if (selectedDateEntry != null)
+                            {
+                                <h6>@selectedDateEntry.Title</h6>
+                                <div class="mb-2">
+                                    <span class="badge bg-primary me-1">@selectedDateEntry.PrimaryMood</span>
+                                    @if (!string.IsNullOrEmpty(selectedDateEntry.SecondaryMood1))
+                                    {
+                                        <span class="badge bg-secondary me-1">@selectedDateEntry.SecondaryMood1</span>
+                                    }
+                                    @if (!string.IsNullOrEmpty(selectedDateEntry.SecondaryMood2))
+                                    {
+                                        <span class="badge bg-secondary">@selectedDateEntry.SecondaryMood2</span>
+                                    }
+                                </div>
+                                <div class="mb-2">
+                                    @foreach (var entryTag in selectedDateEntry.JournalEntryTags)
+                                    {
+                                        <span class="badge me-1" style="background-color: @entryTag.Tag.Color;">@entryTag.Tag.Name</span>
+                                    }
+                                </div>
+                                <p>@selectedDateEntry.Content</p>
+                                <button class="btn btn-primary" @onclick="() => NavigateToJournal(selectedDateEntry.EntryDate)">Edit Entry</button>
+                            }
+                            else
+                            {
+                                <p class="text-muted">No entry for this date.</p>
+                                <button class="btn btn-primary" @onclick="() => NavigateToJournal(selectedDate.Value)">Create Entry</button>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .calendar-grid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 1px;
+        background-color: #dee2e6;
+        border: 1px solid #dee2e6;
+    }
+
+    .calendar-row {
+        display: contents;
+    }
+
+    .calendar-cell {
+        background-color: white;
+        padding: 10px;
+        min-height: 80px;
+        position: relative;
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+
+    .calendar-cell:hover {
+        background-color: #f8f9fa;
+    }
+
+    .calendar-header .calendar-cell {
+        background-color: #e9ecef;
+        font-weight: bold;
+        text-align: center;
+        min-height: 40px;
+        cursor: default;
+    }
+
+    .calendar-header .calendar-cell:hover {
+        background-color: #e9ecef;
+    }
+
+    .calendar-cell.other-month {
+        background-color: #f8f9fa;
+        color: #adb5bd;
+    }
+
+    .calendar-cell.today {
+        background-color: #e7f3ff;
+        border: 2px solid #0d6efd;
+    }
+
+    .calendar-cell.selected {
+        background-color: #cfe2ff;
+    }
+
+    .day-number {
+        font-weight: 500;
+    }
+
+    .entry-indicator {
+        position: absolute;
+        bottom: 5px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 6px;
+        height: 6px;
+        background-color: #0d6efd;
+        border-radius: 50%;
+    }
+</style>
+
+@code {
+    private DateTime currentMonth = DateTime.Today;
+    private List<List<DateTime>> calendarWeeks = new();
+    private Dictionary<DateTime, JournalEntry> entriesByDate = new();
+    private JournalEntry? selectedDateEntry;
+    private DateTime? selectedDate;
+    private bool isLoading = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCalendarData();
+    }
+
+    private async Task LoadCalendarData()
+    {
+        if (AuthService.CurrentUser == null) return;
+
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            // Load entries for the entire calendar view (including previous/next month days visible)
+            var firstDay = new DateTime(currentMonth.Year, currentMonth.Month, 1);
+            var startDate = firstDay.AddDays(-(int)firstDay.DayOfWeek); // Start from Sunday of first week
+            var endDate = startDate.AddDays(41); // 6 weeks = 42 days
+
+            var entries = await JournalService.SearchEntriesAsync(
+                AuthService.CurrentUser.Id,
+                null,
+                startDate,
+                endDate,
+                null,
+                null,
+                0,
+                1000
+            );
+
+            entriesByDate = entries.ToDictionary(e => e.EntryDate.Date, e => e);
+
+            BuildCalendar();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error loading calendar data: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void BuildCalendar()
+    {
+        calendarWeeks.Clear();
+        var firstDay = new DateTime(currentMonth.Year, currentMonth.Month, 1);
+        var lastDay = firstDay.AddMonths(1).AddDays(-1);
+
+        // Start from Sunday of the week containing the first day
+        var startDate = firstDay.AddDays(-(int)firstDay.DayOfWeek);
+        var currentDate = startDate;
+
+        // Build 6 weeks (42 days) to ensure complete calendar display
+        for (int week = 0; week < 6; week++)
+        {
+            var weekList = new List<DateTime>();
+            for (int day = 0; day < 7; day++)
+            {
+                weekList.Add(currentDate);
+                currentDate = currentDate.AddDays(1);
+            }
+            calendarWeeks.Add(weekList);
+        }
+    }
+
+    private string GetDayClass(DateTime day)
+    {
+        var classes = new List<string>();
+
+        if (day.Month != currentMonth.Month)
+        {
+            classes.Add("other-month");
+        }
+
+        if (day.Date == DateTime.Today)
+        {
+            classes.Add("today");
+        }
+
+        if (selectedDate.HasValue && day.Date == selectedDate.Value.Date)
+        {
+            classes.Add("selected");
+        }
+
+        return string.Join(" ", classes);
+    }
+
+    private bool HasEntry(DateTime day)
+    {
+        return entriesByDate.ContainsKey(day.Date);
+    }
+
+    private string GetEntryTitle(DateTime day)
+    {
+        if (entriesByDate.TryGetValue(day.Date, out var entry))
+        {
+            return entry.Title;
+        }
+        return string.Empty;
+    }
+
+    private Task SelectDate(DateTime date)
+    {
+        selectedDate = date;
+        if (entriesByDate.TryGetValue(date.Date, out var entry))
+        {
+            selectedDateEntry = entry;
+        }
+        else
+        {
+            selectedDateEntry = null;
+        }
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private void NavigateToJournal(DateTime date)
+    {
+        Navigation.NavigateTo($"/journal?date={date:yyyy-MM-dd}");
+    }
+
+    private async Task PreviousMonth()
+    {
+        currentMonth = currentMonth.AddMonths(-1);
+        selectedDate = null;
+        selectedDateEntry = null;
+        await LoadCalendarData();
+    }
+
+    private async Task NextMonth()
+    {
+        currentMonth = currentMonth.AddMonths(1);
+        selectedDate = null;
+        selectedDateEntry = null;
+        await LoadCalendarData();
+    }
+
+    private async Task GoToToday()
+    {
+        currentMonth = DateTime.Today;
+        selectedDate = null;
+        selectedDateEntry = null;
+        await LoadCalendarData();
+    }
+}

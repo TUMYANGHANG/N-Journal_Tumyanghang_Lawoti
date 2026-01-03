@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <title>N-Journal_Tumyanghang_Lawoti</title>
+    <base href="/" />
+    <link rel="stylesheet" href="css/bootstrap/bootstrap.min.css" />
+    <link rel="stylesheet" href="css/app.css" />
+    <link rel="stylesheet" href="N-Journal_Tumyanghang_Lawoti.styles.css" />
+    <link rel="icon" href="data:," />
+  </head>
+
+  <body>
+    <div class="status-bar-safe-area"></div>
+
+    <div id="app">Loading...</div>
+
+    <div id="blazor-error-ui">
+      An unhandled error has occurred.
+      <a href="" class="reload">Reload</a>
+      <a class="dismiss">🗙</a>
+    </div>
+
+    <script src="_framework/blazor.webview.js" autostart="false"></script>
+    <script>
+      window.applyTheme = (theme) => {
+        // Remove all theme classes
+        document.body.classList.remove("dark-theme", "light-theme");
+        document.documentElement.style.removeProperty("--primary-color");
+        document.documentElement.style.removeProperty("--secondary-color");
+        document.documentElement.style.removeProperty("--background-color");
+        
+        if (theme === "dark") {
+          document.body.classList.add("dark-theme");
+          document.body.style.backgroundColor = "#1a1a1a";
+          document.body.style.color = "#e0e0e0";
+        } else if (theme === "light") {
+          document.body.classList.add("light-theme");
+          document.body.style.backgroundColor = "#ffffff";
+          document.body.style.color = "#212529";
+        }
+        
+        // Force reflow to apply changes
+        document.body.offsetHeight;
+      };
+
+      window.applyCustomTheme = (customColors) => {
+        try {
+          const colors = JSON.parse(customColors);
+          
+          // Remove theme classes
+          document.body.classList.remove("dark-theme", "light-theme");
+          
+          // Apply custom colors
+          document.documentElement.style.setProperty(
+            "--primary-color",
+            colors.primary || "#0d6efd"
+          );
+          document.documentElement.style.setProperty(
+            "--secondary-color",
+            colors.secondary || "#6c757d"
+          );
+          document.documentElement.style.setProperty(
+            "--background-color",
+            colors.background || "#ffffff"
+          );
+          
+          // Apply background color
+          document.body.style.backgroundColor = colors.background || "#ffffff";
+          document.body.style.color = colors.text || "#212529";
+          
+          // Force reflow
+          document.body.offsetHeight;
+        } catch (e) {
+          console.error("Error applying custom theme:", e);
+        }
+      };
+    </script>
+  </body>
+</html>

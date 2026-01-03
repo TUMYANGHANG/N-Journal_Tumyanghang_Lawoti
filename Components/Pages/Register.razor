@@ -1,0 +1,136 @@
+@page "/register"
+@inject AuthService AuthService
+@inject NavigationManager Navigation
+
+<PageTitle>Register - N-Journal</PageTitle>
+
+@if (AuthService.IsAuthenticated)
+{
+    <RedirectToHome />
+}
+
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6 col-lg-4">
+            <div class="card shadow">
+                <div class="card-body p-4">
+                    <h2 class="card-title text-center mb-4">Create Account</h2>
+                    
+                    @if (!string.IsNullOrEmpty(errorMessage))
+                    {
+                        <div class="alert alert-danger" role="alert">
+                            @errorMessage
+                        </div>
+                    }
+
+                    <EditForm Model="@registerModel" OnValidSubmit="HandleRegister">
+                        <DataAnnotationsValidator />
+                        
+                        <div class="mb-3">
+                            <label for="username" class="form-label">Username</label>
+                            <InputText id="username" class="form-control" @bind-Value="registerModel.Username" />
+                            <ValidationMessage For="@(() => registerModel.Username)" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="email" class="form-label">Email</label>
+                            <InputText id="email" type="email" class="form-control" @bind-Value="registerModel.Email" />
+                            <ValidationMessage For="@(() => registerModel.Email)" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="password" class="form-label">Password</label>
+                            <InputText id="password" type="password" class="form-control" @bind-Value="registerModel.Password" />
+                            <ValidationMessage For="@(() => registerModel.Password)" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="confirmPassword" class="form-label">Confirm Password</label>
+                            <InputText id="confirmPassword" type="password" class="form-control" @bind-Value="registerModel.ConfirmPassword" />
+                            <ValidationMessage For="@(() => registerModel.ConfirmPassword)" />
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100 mb-3" disabled="@isLoading">
+                            @if (isLoading)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2"></span>
+                            }
+                            Register
+                        </button>
+                    </EditForm>
+
+                    <div class="text-center">
+                        <p class="mb-0">Already have an account? <a href="/login">Login here</a></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private RegisterModel registerModel = new();
+    private string? errorMessage;
+    private bool isLoading = false;
+
+    private class RegisterModel
+    {
+        [Required(ErrorMessage = "Username is required")]
+        [StringLength(50, MinimumLength = 3, ErrorMessage = "Username must be between 3 and 50 characters")]
+        public string Username { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Email is required")]
+        [EmailAddress(ErrorMessage = "Invalid email address")]
+        public string Email { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Password is required")]
+        [StringLength(100, MinimumLength = 6, ErrorMessage = "Password must be at least 6 characters")]
+        public string Password { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Please confirm your password")]
+        [Compare(nameof(Password), ErrorMessage = "Passwords do not match")]
+        public string ConfirmPassword { get; set; } = string.Empty;
+    }
+
+    private async Task HandleRegister()
+    {
+        errorMessage = null;
+        isLoading = true;
+
+        try
+        {
+            if (registerModel.Password != registerModel.ConfirmPassword)
+            {
+                errorMessage = "Passwords do not match.";
+                isLoading = false;
+                return;
+            }
+
+            var success = await AuthService.RegisterAsync(
+                registerModel.Username,
+                registerModel.Email,
+                registerModel.Password
+            );
+
+            if (success)
+            {
+                errorMessage = null;
+                Navigation.NavigateTo("/login?registered=true");
+            }
+            else
+            {
+                errorMessage = "Registration failed. Username or email may already be in use, or there was a database error. Please try again.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"An error occurred during registration: {ex.Message}. Please check your connection and try again.";
+            System.Diagnostics.Debug.WriteLine($"Registration exception: {ex}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}
+

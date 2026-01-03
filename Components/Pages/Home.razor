@@ -1,0 +1,93 @@
+﻿@page "/"
+@inject AuthService AuthService
+@inject JournalService JournalService
+@inject NavigationManager Navigation
+
+<PageTitle>Home - N-Journal</PageTitle>
+
+@if (!AuthService.IsAuthenticated)
+{
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-md-8 text-center">
+                <h1 class="display-4 mb-4">Welcome to N-Journal</h1>
+                <p class="lead mb-4">Your personal journaling companion for tracking your daily thoughts, moods, and experiences.</p>
+                <div class="d-grid gap-2 d-md-flex justify-content-md-center">
+                    <a href="/login" class="btn btn-primary btn-lg me-md-2">Login</a>
+                    <a href="/register" class="btn btn-outline-primary btn-lg">Register</a>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-12">
+                <h1 class="mb-4">Welcome back, @AuthService.CurrentUser?.Username!</h1>
+                
+                @if (streakInfo != null)
+                {
+                    <div class="row mb-4">
+                        <div class="col-md-4">
+                            <div class="card text-center">
+                                <div class="card-body">
+                                    <h5 class="card-title">Current Streak</h5>
+                                    <h2 class="text-primary">@streakInfo.CurrentStreak days</h2>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card text-center">
+                                <div class="card-body">
+                                    <h5 class="card-title">Longest Streak</h5>
+                                    <h2 class="text-success">@streakInfo.LongestStreak days</h2>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card text-center">
+                                <div class="card-body">
+                                    <h5 class="card-title">Total Entries</h5>
+                                    <h2 class="text-info">@totalEntries</h2>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Quick Actions</h5>
+                        <div class="d-grid gap-2 d-md-flex">
+                            <a href="/journal" class="btn btn-primary me-md-2">
+                                <span class="bi bi-journal-text"></span> Write Entry
+                            </a>
+                            <a href="/calendar" class="btn btn-outline-primary me-md-2">
+                                <span class="bi bi-calendar"></span> View Calendar
+                            </a>
+                            <a href="/dashboard" class="btn btn-outline-primary">
+                                <span class="bi bi-graph-up"></span> View Analytics
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private Models.Streak? streakInfo;
+    private int totalEntries = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthService.IsAuthenticated && AuthService.CurrentUser != null)
+        {
+            streakInfo = await JournalService.GetOrCreateStreakAsync(AuthService.CurrentUser.Id);
+            totalEntries = await JournalService.GetEntriesCountAsync(AuthService.CurrentUser.Id);
+        }
+    }
+}

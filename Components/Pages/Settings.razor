@@ -1,0 +1,328 @@
+@page "/settings"
+@inject AuthService AuthService
+@inject SettingsService SettingsService
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+@using N_Journal_Tumyanghang_Lawoti.Models
+
+<PageTitle>Settings - N-Journal</PageTitle>
+
+@if (!AuthService.IsAuthenticated)
+{
+    <RedirectToLogin />
+}
+else
+{
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-md-8 offset-md-2">
+                <h1 class="mb-4">Settings</h1>
+
+                <!-- Theme Customization -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5>Theme Customization</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">Select Theme</label>
+                            <div class="btn-group w-100" role="group">
+                                <input type="radio" class="btn-check" name="theme" id="theme-light" value="light" 
+                                       checked="@(userSettings.Theme == "light")" @onchange="@(() => UpdateTheme("light"))" />
+                                <label class="btn btn-outline-primary" for="theme-light">Light</label>
+
+                                <input type="radio" class="btn-check" name="theme" id="theme-dark" value="dark" 
+                                       checked="@(userSettings.Theme == "dark")" @onchange="@(() => UpdateTheme("dark"))" />
+                                <label class="btn btn-outline-primary" for="theme-dark">Dark</label>
+
+                                <input type="radio" class="btn-check" name="theme" id="theme-custom" value="custom" 
+                                       checked="@(userSettings.Theme == "custom")" @onchange="@(() => { ShowCustomTheme = true; if (userSettings.Theme == "custom" && !string.IsNullOrEmpty(userSettings.CustomThemeColors)) { _ = JSRuntime.InvokeVoidAsync("applyCustomTheme", userSettings.CustomThemeColors); } })" />
+                                <label class="btn btn-outline-primary" for="theme-custom">Custom</label>
+                            </div>
+                        </div>
+
+                        @if (userSettings.Theme == "custom" || ShowCustomTheme)
+                        {
+                            <div class="mb-3">
+                                <label class="form-label">Primary Color</label>
+                                <InputText type="color" class="form-control form-control-color" @bind-Value="customPrimaryColor" />
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Secondary Color</label>
+                                <InputText type="color" class="form-control form-control-color" @bind-Value="customSecondaryColor" />
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Background Color</label>
+                                <InputText type="color" class="form-control form-control-color" @bind-Value="customBackgroundColor" />
+                            </div>
+                            <button class="btn btn-primary" @onclick="SaveCustomTheme">Save Custom Theme</button>
+                        }
+                    </div>
+                </div>
+
+                <!-- Security & Privacy -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5>Security & Privacy</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="requirePin" 
+                                       checked="@userSettings.RequirePinForJournal" 
+                                       @onchange="TogglePinRequirement" />
+                                <label class="form-check-label" for="requirePin">
+                                    Require PIN to access journal entries
+                                </label>
+                            </div>
+                        </div>
+
+                        @if (userSettings.RequirePinForJournal)
+                        {
+                            @if (string.IsNullOrEmpty(userSettings.JournalPinHash))
+                            {
+                                <div class="mb-3">
+                                    <label class="form-label">Set PIN (4-10 digits)</label>
+                                    <InputText type="password" class="form-control" @bind-Value="newPin" maxlength="10" />
+                                    <small class="text-muted">Enter a PIN to protect your journal entries</small>
+                                </div>
+                                <button class="btn btn-primary" @onclick="SetPin">Set PIN</button>
+                                @if (!string.IsNullOrEmpty(pinMessage))
+                                {
+                                    <div class="alert @(pinSuccess ? "alert-success" : "alert-danger") mt-2">
+                                        @pinMessage
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <div class="mb-3">
+                                    <label class="form-label">Change PIN</label>
+                                    <InputText type="password" class="form-control mb-2" @bind-Value="currentPin" 
+                                               placeholder="Current PIN" maxlength="10" />
+                                    <InputText type="password" class="form-control mb-2" @bind-Value="newPin" 
+                                               placeholder="New PIN (4-10 digits)" maxlength="10" />
+                                    <InputText type="password" class="form-control" @bind-Value="confirmPin" 
+                                               placeholder="Confirm New PIN" maxlength="10" />
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <button class="btn btn-primary" @onclick="ChangePin">Change PIN</button>
+                                    <button class="btn btn-danger" @onclick="DisablePin">Disable PIN</button>
+                                </div>
+                                @if (!string.IsNullOrEmpty(pinMessage))
+                                {
+                                    <div class="alert @(pinSuccess ? "alert-success" : "alert-danger") mt-2">
+                                        @pinMessage
+                                    </div>
+                                }
+                            }
+                        }
+                    </div>
+                </div>
+
+                <!-- Account Information -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5>Account Information</h5>
+                    </div>
+                    <div class="card-body">
+                        <p><strong>Username:</strong> @AuthService.CurrentUser?.Username</p>
+                        <p><strong>Email:</strong> @AuthService.CurrentUser?.Email</p>
+                        <p><strong>Member Since:</strong> @AuthService.CurrentUser?.CreatedAt.ToString("MMMM dd, yyyy")</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private UserSettings userSettings = new();
+    private bool ShowCustomTheme = false;
+    private string customPrimaryColor = "#0d6efd";
+    private string customSecondaryColor = "#6c757d";
+    private string customBackgroundColor = "#ffffff";
+
+    // PIN Management
+    private string newPin = string.Empty;
+    private string currentPin = string.Empty;
+    private string confirmPin = string.Empty;
+    private string pinMessage = string.Empty;
+    private bool pinSuccess = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSettings();
+    }
+
+    private async Task LoadSettings()
+    {
+        if (AuthService.CurrentUser == null) return;
+
+        userSettings = await SettingsService.GetOrCreateSettingsAsync(AuthService.CurrentUser.Id);
+        
+        // Apply theme on load
+        if (userSettings.Theme == "custom" && !string.IsNullOrEmpty(userSettings.CustomThemeColors))
+        {
+            ShowCustomTheme = true;
+            // Parse and set custom colors
+            try
+            {
+                var colors = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(userSettings.CustomThemeColors);
+                if (colors != null)
+                {
+                    customPrimaryColor = colors.GetValueOrDefault("primary", "#0d6efd");
+                    customSecondaryColor = colors.GetValueOrDefault("secondary", "#6c757d");
+                    customBackgroundColor = colors.GetValueOrDefault("background", "#ffffff");
+                }
+            }
+            catch { }
+            await JSRuntime.InvokeVoidAsync("applyCustomTheme", userSettings.CustomThemeColors);
+        }
+        else
+        {
+            await JSRuntime.InvokeVoidAsync("applyTheme", userSettings.Theme);
+        }
+    }
+
+    private async Task UpdateTheme(string theme)
+    {
+        if (AuthService.CurrentUser == null) return;
+
+        userSettings.Theme = theme;
+        await SettingsService.UpdateThemeAsync(AuthService.CurrentUser.Id, theme, null);
+        
+        // Apply theme via JavaScript immediately
+        await JSRuntime.InvokeVoidAsync("applyTheme", theme);
+        
+        // Force UI update
+        StateHasChanged();
+        
+        if (theme != "custom")
+        {
+            ShowCustomTheme = false;
+        }
+    }
+
+    private async Task SaveCustomTheme()
+    {
+        if (AuthService.CurrentUser == null) return;
+
+        var customColors = $"{{\"primary\":\"{customPrimaryColor}\",\"secondary\":\"{customSecondaryColor}\",\"background\":\"{customBackgroundColor}\"}}";
+        await SettingsService.UpdateThemeAsync(AuthService.CurrentUser.Id, "custom", customColors);
+        
+        userSettings.Theme = "custom";
+        userSettings.CustomThemeColors = customColors;
+        
+        // Apply custom theme via JavaScript immediately
+        await JSRuntime.InvokeVoidAsync("applyCustomTheme", customColors);
+        
+        // Force UI update
+        StateHasChanged();
+        
+        pinMessage = "Custom theme saved and applied successfully!";
+        pinSuccess = true;
+    }
+
+    private async Task TogglePinRequirement(ChangeEventArgs e)
+    {
+        if (AuthService.CurrentUser == null) return;
+
+        var isChecked = (bool)(e.Value ?? false);
+        userSettings.RequirePinForJournal = isChecked;
+
+        if (!isChecked)
+        {
+            await SettingsService.DisableJournalPinAsync(AuthService.CurrentUser.Id);
+            userSettings.JournalPinHash = null;
+        }
+    }
+
+    private async Task SetPin()
+    {
+        if (AuthService.CurrentUser == null) return;
+
+        if (string.IsNullOrWhiteSpace(newPin) || newPin.Length < 4)
+        {
+            pinMessage = "PIN must be at least 4 characters long.";
+            pinSuccess = false;
+            return;
+        }
+
+        var success = await SettingsService.SetJournalPinAsync(AuthService.CurrentUser.Id, newPin);
+        if (success)
+        {
+            pinMessage = "PIN set successfully!";
+            pinSuccess = true;
+            userSettings.RequirePinForJournal = true;
+            newPin = string.Empty;
+            await LoadSettings();
+        }
+        else
+        {
+            pinMessage = "Failed to set PIN. Please try again.";
+            pinSuccess = false;
+        }
+    }
+
+    private async Task ChangePin()
+    {
+        if (AuthService.CurrentUser == null) return;
+
+        if (string.IsNullOrWhiteSpace(currentPin))
+        {
+            pinMessage = "Please enter your current PIN.";
+            pinSuccess = false;
+            return;
+        }
+
+        var isValid = await SettingsService.VerifyJournalPinAsync(AuthService.CurrentUser.Id, currentPin);
+        if (!isValid)
+        {
+            pinMessage = "Current PIN is incorrect.";
+            pinSuccess = false;
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(newPin) || newPin.Length < 4)
+        {
+            pinMessage = "New PIN must be at least 4 characters long.";
+            pinSuccess = false;
+            return;
+        }
+
+        if (newPin != confirmPin)
+        {
+            pinMessage = "New PIN and confirmation do not match.";
+            pinSuccess = false;
+            return;
+        }
+
+        var success = await SettingsService.SetJournalPinAsync(AuthService.CurrentUser.Id, newPin);
+        if (success)
+        {
+            pinMessage = "PIN changed successfully!";
+            pinSuccess = true;
+            currentPin = string.Empty;
+            newPin = string.Empty;
+            confirmPin = string.Empty;
+            await LoadSettings();
+        }
+        else
+        {
+            pinMessage = "Failed to change PIN. Please try again.";
+            pinSuccess = false;
+        }
+    }
+
+    private async Task DisablePin()
+    {
+        if (AuthService.CurrentUser == null) return;
+
+        await SettingsService.DisableJournalPinAsync(AuthService.CurrentUser.Id);
+        userSettings.RequirePinForJournal = false;
+        userSettings.JournalPinHash = null;
+        pinMessage = "PIN protection disabled.";
+        pinSuccess = true;
+    }
+}

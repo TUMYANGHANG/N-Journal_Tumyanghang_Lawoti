@@ -1,0 +1,129 @@
+@page "/login"
+@inject AuthService AuthService
+@inject NavigationManager Navigation
+@using Microsoft.AspNetCore.Components
+@using Microsoft.AspNetCore.Components.Web
+
+<PageTitle>Login - N-Journal</PageTitle>
+
+@if (AuthService.IsAuthenticated)
+{
+    <RedirectToHome />
+}
+
+@if (showSuccessMessage)
+{
+    <div class="container mt-3">
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            Registration successful! Please login with your credentials.
+            <button type="button" class="btn-close" @onclick="() => showSuccessMessage = false"></button>
+        </div>
+    </div>
+}
+
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6 col-lg-4">
+            <div class="card shadow">
+                <div class="card-body p-4">
+                    <h2 class="card-title text-center mb-4">Welcome Back</h2>
+                    
+                    @if (!string.IsNullOrEmpty(errorMessage))
+                    {
+                        <div class="alert alert-danger" role="alert">
+                            @errorMessage
+                        </div>
+                    }
+
+                    <EditForm Model="@loginModel" OnValidSubmit="HandleLogin">
+                        <DataAnnotationsValidator />
+                        
+                        <div class="mb-3">
+                            <label for="username" class="form-label">Username</label>
+                            <InputText id="username" class="form-control" @bind-Value="loginModel.Username" />
+                            <ValidationMessage For="@(() => loginModel.Username)" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="password" class="form-label">Password</label>
+                            <InputText id="password" type="password" class="form-control" @bind-Value="loginModel.Password" />
+                            <ValidationMessage For="@(() => loginModel.Password)" />
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100 mb-3" disabled="@isLoading">
+                            @if (isLoading)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2"></span>
+                            }
+                            Login
+                        </button>
+                    </EditForm>
+
+                    <div class="text-center">
+                        <p class="mb-0">Don't have an account? <a href="/register">Register here</a></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    [SupplyParameterFromQuery]
+    public string? Registered { get; set; }
+
+    private LoginModel loginModel = new();
+    private string? errorMessage;
+    private bool isLoading = false;
+    private bool showSuccessMessage = false;
+
+    protected override void OnInitialized()
+    {
+        if (Registered == "true")
+        {
+            showSuccessMessage = true;
+        }
+    }
+
+    private class LoginModel
+    {
+        [Required(ErrorMessage = "Username is required")]
+        public string Username { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Password is required")]
+        public string Password { get; set; } = string.Empty;
+    }
+
+    private async Task HandleLogin()
+    {
+        errorMessage = null;
+        isLoading = true;
+
+        try
+        {
+            var success = await AuthService.LoginAsync(
+                loginModel.Username,
+                loginModel.Password
+            );
+
+            if (success)
+            {
+                Navigation.NavigateTo("/");
+            }
+            else
+            {
+                errorMessage = "Invalid username or password.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"An error occurred: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}
+

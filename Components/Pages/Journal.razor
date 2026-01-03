@@ -1,0 +1,700 @@
+@page "/journal"
+@page "/journal/{date}"
+@inject AuthService AuthService
+@inject JournalService JournalService
+@inject SettingsService SettingsService
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+@using N_Journal_Tumyanghang_Lawoti.Models
+@using Markdig
+@using Microsoft.AspNetCore.Components
+
+<PageTitle>Journal - N-Journal</PageTitle>
+
+@if (!AuthService.IsAuthenticated)
+{
+    <RedirectToLogin />
+}
+else if (showPinPrompt)
+{
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-md-4">
+                <div class="card shadow">
+                    <div class="card-body p-4">
+                        <h3 class="card-title text-center mb-4">Enter PIN</h3>
+                        <div class="mb-3">
+                            <label for="pin" class="form-label">PIN</label>
+                            <InputText id="pin" type="password" class="form-control" @bind-Value="pinInput" maxlength="10" />
+                        </div>
+                        @if (!string.IsNullOrEmpty(pinError))
+                        {
+                            <div class="alert alert-danger">@pinError</div>
+                        }
+                        <button class="btn btn-primary w-100" @onclick="VerifyPin">Verify</button>
+                        <button class="btn btn-link w-100 mt-2" @onclick="CancelPin">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <div class="container mt-4">
+        <div class="row">
+            <!-- Search and Filter Sidebar -->
+            <div class="col-md-3 mb-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>Search & Filter</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">Search</label>
+                            <InputText class="form-control" @bind-Value="searchTerm" placeholder="Title or content..." />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Start Date</label>
+                            <InputDate class="form-control" @bind-Value="filterStartDate" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">End Date</label>
+                            <InputDate class="form-control" @bind-Value="filterEndDate" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Mood</label>
+                            <InputSelect class="form-control" @bind-Value="filterMood">
+                                <option value="">All Moods</option>
+                                @foreach (var mood in availableMoods)
+                                {
+                                    <option value="@mood">@mood</option>
+                                }
+                            </InputSelect>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Tag</label>
+                            <InputSelect class="form-control" @bind-Value="filterTagId">
+                                <option value="">All Tags</option>
+                                @foreach (var tag in availableTags)
+                                {
+                                    <option value="@tag.Id">@tag.Name</option>
+                                }
+                            </InputSelect>
+                        </div>
+                        <button class="btn btn-primary w-100 mb-2" @onclick="ApplyFilters">Apply Filters</button>
+                        <button class="btn btn-secondary w-100" @onclick="ClearFilters">Clear</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Content -->
+            <div class="col-md-9">
+                @if (showEditor)
+                {
+                    <!-- Entry Editor -->
+                    <div class="card mb-4">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5>@(currentEntry?.Id > 0 ? "Edit Entry" : "New Entry") - @selectedDate.ToString("MMMM dd, yyyy")</h5>
+                            <button class="btn btn-sm btn-secondary" @onclick="CancelEdit">Cancel</button>
+                        </div>
+                        <div class="card-body">
+                            <EditForm Model="@entryModel" OnValidSubmit="SaveEntry">
+                                <DataAnnotationsValidator />
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">Title *</label>
+                                    <InputText class="form-control" @bind-Value="entryModel.Title" />
+                                    <ValidationMessage For="@(() => entryModel.Title)" />
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Primary Mood *</label>
+                                    <InputSelect class="form-control" @bind-Value="entryModel.PrimaryMood">
+                                        <option value="">Select Mood</option>
+                                        @foreach (var mood in availableMoods)
+                                        {
+                                            <option value="@mood">@mood</option>
+                                        }
+                                    </InputSelect>
+                                    <ValidationMessage For="@(() => entryModel.PrimaryMood)" />
+                                </div>
+
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <label class="form-label">Secondary Mood 1</label>
+                                        <InputSelect class="form-control" @bind-Value="entryModel.SecondaryMood1">
+                                            <option value="">None</option>
+                                            @foreach (var mood in availableMoods)
+                                            {
+                                                <option value="@mood">@mood</option>
+                                            }
+                                        </InputSelect>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label">Secondary Mood 2</label>
+                                        <InputSelect class="form-control" @bind-Value="entryModel.SecondaryMood2">
+                                            <option value="">None</option>
+                                            @foreach (var mood in availableMoods)
+                                            {
+                                                <option value="@mood">@mood</option>
+                                            }
+                                        </InputSelect>
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Tags</label>
+                                    <div class="d-flex flex-wrap gap-2 mb-2">
+                                        @foreach (var tag in availableTags)
+                                        {
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" 
+                                                       checked="@entryModel.SelectedTagIds.Contains(tag.Id)"
+                                                       @onchange="@((e) => ToggleTag(tag.Id, (bool)e.Value!))" />
+                                                <label class="form-check-label" style="color: @tag.Color;">
+                                                    @tag.Name
+                                                </label>
+                                            </div>
+                                        }
+                                    </div>
+                                    <button type="button" class="btn btn-sm btn-outline-primary" @onclick="ShowCreateTagModal">+ Create New Tag</button>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Content *</label>
+                                    <div class="btn-toolbar mb-2" role="toolbar">
+                                        <div class="btn-group me-2" role="group">
+                                            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="@(() => InsertMarkdown("**", "**"))" title="Bold">B</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="@(() => InsertMarkdown("*", "*"))" title="Italic">I</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="@(() => InsertMarkdown("# ", ""))" title="Heading">H</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="@(() => InsertMarkdown("- ", ""))" title="List">•</button>
+                                            <button type="button" class="btn btn-sm btn-outline-secondary" @onclick="@(() => InsertMarkdown("[", "](url)"))" title="Link">Link</button>
+                                        </div>
+                                    </div>
+                                    <textarea class="form-control" rows="15" value="@entryModel.Content" 
+                                              @oninput="@((ChangeEventArgs e) => { entryModel.Content = e.Value?.ToString() ?? string.Empty; UpdateWordCount(); })"
+                                              placeholder="Write your journal entry here... Markdown supported: **bold**, *italic*, # heading, - list, [link](url)"></textarea>
+                                    <ValidationMessage For="@(() => entryModel.Content)" />
+                                    <small class="text-muted">Word count: @entryModel.WordCount</small>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">Preview</label>
+                                    <div class="border p-3" style="min-height: 100px; max-height: 300px; overflow-y: auto;">
+                                        @((MarkupString)GetMarkdownPreview(entryModel.Content))
+                                    </div>
+                                </div>
+
+                                @if (!string.IsNullOrEmpty(saveErrorMessage))
+                                {
+                                    <div class="alert alert-danger mb-3">
+                                        @saveErrorMessage
+                                    </div>
+                                }
+                                
+                                <div class="d-flex gap-2">
+                                    <button type="submit" class="btn btn-primary" disabled="@isSaving">
+                                        @if (isSaving)
+                                        {
+                                            <span class="spinner-border spinner-border-sm me-2"></span>
+                                        }
+                                        Save Entry
+                                    </button>
+                                    @if (currentEntry?.Id > 0)
+                                    {
+                                        <button type="button" class="btn btn-danger" @onclick="DeleteCurrentEntry" disabled="@isSaving">
+                                            Delete
+                                        </button>
+                                    }
+                                </div>
+                            </EditForm>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <!-- Entry List -->
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h2>My Journal Entries</h2>
+                        <button class="btn btn-primary" @onclick="CreateNewEntry">
+                            <span class="bi bi-plus-circle"></span> New Entry
+                        </button>
+                    </div>
+
+                    @if (entries.Any())
+                    {
+                        @foreach (var entry in entries)
+                        {
+                            <div class="card mb-3">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h5 class="mb-0">@entry.Title</h5>
+                                        <small class="text-muted">@entry.EntryDate.ToString("MMMM dd, yyyy")</small>
+                                    </div>
+                                    <div>
+                                        <span class="badge bg-primary me-1">@entry.PrimaryMood</span>
+                                        @if (!string.IsNullOrEmpty(entry.SecondaryMood1))
+                                        {
+                                            <span class="badge bg-secondary me-1">@entry.SecondaryMood1</span>
+                                        }
+                                        @if (!string.IsNullOrEmpty(entry.SecondaryMood2))
+                                        {
+                                            <span class="badge bg-secondary">@entry.SecondaryMood2</span>
+                                        }
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-2">
+                                        @foreach (var entryTag in entry.JournalEntryTags)
+                                        {
+                                            <span class="badge me-1" style="background-color: @entryTag.Tag.Color;">@entryTag.Tag.Name</span>
+                                        }
+                                    </div>
+                                    <div class="text-truncate">
+                                        @((MarkupString)GetMarkdownPreview(entry.Content.Length > 200 ? entry.Content.Substring(0, 200) + "..." : entry.Content))
+                                    </div>
+                                    <div class="mt-2">
+                                        <small class="text-muted">@entry.WordCount words</small>
+                                        <div class="float-end">
+                                            <button class="btn btn-sm btn-primary" @onclick="() => EditEntry(entry)">Edit</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        <!-- Pagination -->
+                        <nav>
+                            <ul class="pagination justify-content-center">
+                                <li class="page-item @(currentPage == 1 ? "disabled" : "")">
+                                    <button class="page-link" @onclick="() => ChangePage(currentPage - 1)">Previous</button>
+                                </li>
+                                @for (int i = 1; i <= totalPages; i++)
+                                {
+                                    <li class="page-item @(i == currentPage ? "active" : "")">
+                                        <button class="page-link" @onclick="() => ChangePage(i)">@i</button>
+                                    </li>
+                                }
+                                <li class="page-item @(currentPage == totalPages ? "disabled" : "")">
+                                    <button class="page-link" @onclick="() => ChangePage(currentPage + 1)">Next</button>
+                                </li>
+                            </ul>
+                        </nav>
+                    }
+                    else
+                    {
+                        <div class="card">
+                            <div class="card-body text-center py-5">
+                                <p class="text-muted">No journal entries found. Create your first entry!</p>
+                                <button class="btn btn-primary" @onclick="CreateNewEntry">Create Entry</button>
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Tag Modal -->
+    @if (showTagModal)
+    {
+        <div class="modal show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Create New Tag</h5>
+                        <button type="button" class="btn-close" @onclick="CloseTagModal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">Tag Name</label>
+                            <InputText class="form-control" @bind-Value="newTagName" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Color</label>
+                            <InputText type="color" class="form-control form-control-color" @bind-Value="newTagColor" />
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="CloseTagModal">Cancel</button>
+                        <button type="button" class="btn btn-primary" @onclick="CreateTag">Create</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    private List<JournalEntry> entries = new();
+    private JournalEntry? currentEntry;
+    private bool showEditor = false;
+    private bool showPinPrompt = false;
+    private bool isSaving = false;
+    private DateTime selectedDate = DateTime.Today;
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private int totalPages = 1;
+    private int totalEntries = 0;
+
+    // Filters
+    private string searchTerm = string.Empty;
+    private DateTime? filterStartDate;
+    private DateTime? filterEndDate;
+    private string filterMood = string.Empty;
+    private int? filterTagId;
+
+    // Tags and Moods
+    private List<Tag> availableTags = new();
+    private List<string> availableMoods = new() { "Happy", "Sad", "Angry", "Anxious", "Excited", "Calm", "Tired", "Energetic", "Grateful", "Frustrated", "Content", "Lonely" };
+
+    // Entry Model
+    private EntryModel entryModel = new();
+
+    // Tag Modal
+    private bool showTagModal = false;
+    private string newTagName = string.Empty;
+    private string newTagColor = "#6c757d";
+
+    // PIN
+    private string pinInput = string.Empty;
+    private string pinError = string.Empty;
+    
+    // Save error
+    private string saveErrorMessage = string.Empty;
+
+    [Parameter]
+    public string? Date { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await CheckPinRequirement();
+        if (!showPinPrompt)
+        {
+            await LoadData();
+            
+            // If date parameter is provided, open editor for that date
+            if (!string.IsNullOrEmpty(Date) && DateTime.TryParse(Date, out var parsedDate))
+            {
+                selectedDate = parsedDate.Date;
+                var entry = await JournalService.GetEntryByDateAsync(AuthService.CurrentUser!.Id, parsedDate);
+                if (entry != null)
+                {
+                    await EditEntry(entry);
+                }
+                else
+                {
+                    entryModel = new EntryModel
+                    {
+                        EntryDate = parsedDate.Date,
+                        SelectedTagIds = new List<int>()
+                    };
+                    showEditor = true;
+                }
+            }
+        }
+    }
+
+    private async Task CheckPinRequirement()
+    {
+        if (AuthService.CurrentUser == null) return;
+
+        var settings = await SettingsService.GetOrCreateSettingsAsync(AuthService.CurrentUser.Id);
+        if (settings.RequirePinForJournal)
+        {
+            showPinPrompt = true;
+        }
+    }
+
+    private async Task VerifyPin()
+    {
+        if (AuthService.CurrentUser == null) return;
+
+        pinError = string.Empty;
+        var isValid = await SettingsService.VerifyJournalPinAsync(AuthService.CurrentUser.Id, pinInput);
+        if (isValid)
+        {
+            showPinPrompt = false;
+            pinInput = string.Empty;
+            await LoadData();
+        }
+        else
+        {
+            pinError = "Invalid PIN. Please try again.";
+        }
+    }
+
+    private void CancelPin()
+    {
+        Navigation.NavigateTo("/");
+    }
+
+    private async Task LoadData()
+    {
+        if (AuthService.CurrentUser == null) return;
+
+        availableTags = await JournalService.GetTagsAsync(AuthService.CurrentUser.Id);
+        await LoadEntries();
+    }
+
+    private async Task LoadEntries()
+    {
+        if (AuthService.CurrentUser == null) return;
+
+        totalEntries = await JournalService.GetEntriesCountAsync(AuthService.CurrentUser.Id);
+        totalPages = (int)Math.Ceiling(totalEntries / (double)pageSize);
+
+        entries = await JournalService.GetEntriesAsync(AuthService.CurrentUser.Id, (currentPage - 1) * pageSize, pageSize);
+    }
+
+    private async Task ApplyFilters()
+    {
+        if (AuthService.CurrentUser == null) return;
+
+        currentPage = 1;
+        entries = await JournalService.SearchEntriesAsync(
+            AuthService.CurrentUser.Id,
+            string.IsNullOrWhiteSpace(searchTerm) ? null : searchTerm,
+            filterStartDate,
+            filterEndDate,
+            string.IsNullOrWhiteSpace(filterMood) ? null : filterMood,
+            filterTagId,
+            (currentPage - 1) * pageSize,
+            pageSize
+        );
+        totalEntries = entries.Count;
+        totalPages = (int)Math.Ceiling(totalEntries / (double)pageSize);
+    }
+
+    private async Task ClearFilters()
+    {
+        searchTerm = string.Empty;
+        filterStartDate = null;
+        filterEndDate = null;
+        filterMood = string.Empty;
+        filterTagId = null;
+        currentPage = 1;
+        await LoadEntries();
+    }
+
+    private void CreateNewEntry()
+    {
+        selectedDate = DateTime.Today;
+        currentEntry = null;
+        entryModel = new EntryModel
+        {
+            EntryDate = selectedDate,
+            SelectedTagIds = new List<int>()
+        };
+        showEditor = true;
+    }
+
+    private Task EditEntry(JournalEntry entry)
+    {
+        currentEntry = entry;
+        selectedDate = entry.EntryDate;
+        entryModel = new EntryModel
+        {
+            Id = entry.Id,
+            Title = entry.Title,
+            Content = entry.Content,
+            PrimaryMood = entry.PrimaryMood,
+            SecondaryMood1 = entry.SecondaryMood1 ?? string.Empty,
+            SecondaryMood2 = entry.SecondaryMood2 ?? string.Empty,
+            EntryDate = entry.EntryDate,
+            SelectedTagIds = entry.JournalEntryTags.Select(jet => jet.TagId).ToList(),
+            WordCount = entry.WordCount
+        };
+        showEditor = true;
+        return Task.CompletedTask;
+    }
+
+    private void CancelEdit()
+    {
+        showEditor = false;
+        currentEntry = null;
+        entryModel = new EntryModel();
+    }
+
+    private async Task SaveEntry()
+    {
+        if (AuthService.CurrentUser == null)
+        {
+            saveErrorMessage = "You must be logged in to save entries.";
+            return;
+        }
+
+        saveErrorMessage = string.Empty;
+        isSaving = true;
+        StateHasChanged();
+
+        try
+        {
+            // Validate required fields
+            if (string.IsNullOrWhiteSpace(entryModel.Title))
+            {
+                saveErrorMessage = "Title is required.";
+                isSaving = false;
+                StateHasChanged();
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(entryModel.Content))
+            {
+                saveErrorMessage = "Content is required.";
+                isSaving = false;
+                StateHasChanged();
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(entryModel.PrimaryMood))
+            {
+                saveErrorMessage = "Primary mood is required.";
+                isSaving = false;
+                StateHasChanged();
+                return;
+            }
+
+            // Update word count before saving
+            entryModel.WordCount = CountWords(entryModel.Content);
+
+            var entry = await JournalService.CreateOrUpdateEntryAsync(
+                AuthService.CurrentUser.Id,
+                entryModel.EntryDate,
+                entryModel.Title.Trim(),
+                entryModel.Content.Trim(),
+                entryModel.Content.Trim(), // Using same content for markdown
+                entryModel.PrimaryMood,
+                string.IsNullOrWhiteSpace(entryModel.SecondaryMood1) ? null : entryModel.SecondaryMood1.Trim(),
+                string.IsNullOrWhiteSpace(entryModel.SecondaryMood2) ? null : entryModel.SecondaryMood2.Trim(),
+                entryModel.SelectedTagIds.Any() ? entryModel.SelectedTagIds : null
+            );
+
+            showEditor = false;
+            saveErrorMessage = string.Empty;
+            await LoadEntries();
+        }
+        catch (Exception ex)
+        {
+            saveErrorMessage = $"Error saving entry: {ex.Message}";
+            System.Diagnostics.Debug.WriteLine($"Error saving entry: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
+        }
+        finally
+        {
+            isSaving = false;
+            StateHasChanged();
+        }
+    }
+    
+    private void UpdateWordCount()
+    {
+        entryModel.WordCount = CountWords(entryModel.Content);
+        StateHasChanged();
+    }
+    
+    private int CountWords(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return 0;
+        return text.Split(new[] { ' ', '\t', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries).Length;
+    }
+
+    private async Task DeleteCurrentEntry()
+    {
+        if (AuthService.CurrentUser == null || currentEntry == null) return;
+
+        if (await JSRuntime.InvokeAsync<bool>("confirm", "Are you sure you want to delete this entry?"))
+        {
+            await JournalService.DeleteEntryAsync(currentEntry.Id, AuthService.CurrentUser.Id);
+            showEditor = false;
+            await LoadEntries();
+        }
+    }
+
+    private async Task ChangePage(int page)
+    {
+        if (page >= 1 && page <= totalPages)
+        {
+            currentPage = page;
+            if (string.IsNullOrWhiteSpace(searchTerm) && !filterStartDate.HasValue && !filterEndDate.HasValue && 
+                string.IsNullOrWhiteSpace(filterMood) && !filterTagId.HasValue)
+            {
+                await LoadEntries();
+            }
+            else
+            {
+                await ApplyFilters();
+            }
+        }
+    }
+
+    private void ToggleTag(int tagId, bool isChecked)
+    {
+        if (isChecked && !entryModel.SelectedTagIds.Contains(tagId))
+        {
+            entryModel.SelectedTagIds.Add(tagId);
+        }
+        else if (!isChecked)
+        {
+            entryModel.SelectedTagIds.Remove(tagId);
+        }
+    }
+
+    private void ShowCreateTagModal()
+    {
+        showTagModal = true;
+        newTagName = string.Empty;
+        newTagColor = "#6c757d";
+    }
+
+    private void CloseTagModal()
+    {
+        showTagModal = false;
+    }
+
+    private async Task CreateTag()
+    {
+        if (AuthService.CurrentUser == null || string.IsNullOrWhiteSpace(newTagName)) return;
+
+        var tag = await JournalService.CreateTagAsync(AuthService.CurrentUser.Id, newTagName, newTagColor, false);
+        availableTags.Add(tag);
+        showTagModal = false;
+    }
+
+    private Task InsertMarkdown(string prefix, string suffix)
+    {
+        // This would need JavaScript interop to insert text at cursor position
+        // For now, just append to content
+        entryModel.Content += prefix + suffix;
+        return Task.CompletedTask;
+    }
+
+    private string GetMarkdownPreview(string content)
+    {
+        if (string.IsNullOrWhiteSpace(content)) return "<p class='text-muted'>No content</p>";
+        var pipeline = new MarkdownPipelineBuilder().UseAdvancedExtensions().Build();
+        return Markdown.ToHtml(content, pipeline);
+    }
+
+    private class EntryModel
+    {
+        public int Id { get; set; }
+        [Required(ErrorMessage = "Title is required")]
+        [StringLength(200, ErrorMessage = "Title must be less than 200 characters")]
+        public string Title { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Content is required")]
+        public string Content { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Primary mood is required")]
+        public string PrimaryMood { get; set; } = string.Empty;
+
+        public string SecondaryMood1 { get; set; } = string.Empty;
+        public string SecondaryMood2 { get; set; } = string.Empty;
+
+        public DateTime EntryDate { get; set; } = DateTime.Today;
+        public List<int> SelectedTagIds { get; set; } = new();
+        public int WordCount { get; set; } = 0;
+    }
+}

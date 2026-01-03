@@ -1,0 +1,47 @@
+﻿@inherits LayoutComponentBase
+@inject AuthService AuthService
+@inject SettingsService SettingsService
+@inject IJSRuntime JSRuntime
+@using N_Journal_Tumyanghang_Lawoti.Models
+
+<div class="page">
+    <div class="sidebar">
+        <NavMenu />
+    </div>
+
+    <main>
+        <div class="top-row px-4">
+            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
+        </div>
+
+        <article class="content px-4">
+            @Body
+        </article>
+    </main>
+</div>
+
+@code {
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && AuthService.IsAuthenticated && AuthService.CurrentUser != null)
+        {
+            try
+            {
+                var settings = await SettingsService.GetOrCreateSettingsAsync(AuthService.CurrentUser.Id);
+                
+                if (settings.Theme == "custom" && !string.IsNullOrEmpty(settings.CustomThemeColors))
+                {
+                    await JSRuntime.InvokeVoidAsync("applyCustomTheme", settings.CustomThemeColors);
+                }
+                else
+                {
+                    await JSRuntime.InvokeVoidAsync("applyTheme", settings.Theme);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error applying theme: {ex.Message}");
+            }
+        }
+    }
+}
