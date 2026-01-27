@@ -707,10 +707,13 @@ else
             var today = DateTime.Today;
             if (currentEntry == null)
             {
+                // Ensure entry date is set to today (in case it was modified)
+                entryModel.EntryDate = today;
+                
                 // Check if entry date is today
                 if (entryModel.EntryDate.Date != today)
                 {
-                    saveErrorMessage = "New entries can only be created for today's date. Past or future dates are not allowed.";
+                    saveErrorMessage = $"New entries can only be created for today's date ({today:yyyy-MM-dd}). Past or future dates are not allowed.";
                     isSaving = false;
                     StateHasChanged();
                     return;

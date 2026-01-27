@@ -16,6 +16,7 @@ public class JournalService
     // Journal Entry Management
     public async Task<JournalEntry?> GetEntryByDateAsync(int userId, DateTime date)
     {
+        // Normalize to date only for comparison (ignore time component)
         var entryDate = date.Date;
         return await _context.JournalEntries
             .Include(e => e.JournalEntryTags)
@@ -59,12 +60,20 @@ public class JournalService
         var isNewEntry = entry == null;
 
         // Prevent creating new entries for any date other than today
-        var today = DateTime.UtcNow.Date;
+        // Compare dates only (ignore time component and timezone)
+        // Use the entry date's date portion for comparison
+        var entryDateOnly = dateOnly.Date;
+        
+        // Get today's date in the same timezone context as the entry date
+        // Since entryDate comes from UI (local time), compare with local today
+        var today = DateTime.Today;
+        
         if (isNewEntry)
         {
-            if (dateOnly != today)
+            // Compare date portions only
+            if (entryDateOnly != today)
             {
-                throw new InvalidOperationException("New entries can only be created for today's date. Past or future dates are not allowed.");
+                throw new InvalidOperationException($"New entries can only be created for today's date ({today:yyyy-MM-dd}). Past or future dates are not allowed.");
             }
 
             // Double-check: Prevent duplicate entries (should not happen due to unique constraint, but add explicit check)
@@ -297,36 +306,106 @@ public class JournalService
         }
         return streak;
     }
+    
+    public async Task RecalculateStreakAsync(int userId)
+    {
+        // Get all unique entry dates
+        var allEntryDates = await _context.JournalEntries
+            .Where(e => e.UserId == userId)
+            .Select(e => e.EntryDate.Date)
+            .Distinct()
+            .OrderByDescending(d => d)
+            .ToListAsync();
+
+        var streak = await _context.Streaks.FirstOrDefaultAsync(s => s.UserId == userId);
+        if (streak == null)
+        {
+            streak = new Streak
+            {
+                UserId = userId,
+                CurrentStreak = 0,
+                LongestStreak = 0,
+                LastEntryDate = DateTime.MinValue,
+                UpdatedAt = DateTime.UtcNow
+            };
+            _context.Streaks.Add(streak);
+        }
+
+        if (!allEntryDates.Any())
+        {
+            streak.CurrentStreak = 0;
+            streak.LongestStreak = 0;
+            streak.LastEntryDate = DateTime.MinValue;
+            streak.UpdatedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+            return;
+        }
+
+        var today = DateTime.Today;
+        
+        // Calculate current streak (consecutive days from today backwards)
+        var currentStreak = 0;
+        var checkDate = today;
+        
+        foreach (var date in allEntryDates)
+        {
+            if (date == checkDate)
+            {
+                currentStreak++;
+                checkDate = checkDate.AddDays(-1);
+            }
+            else if (date < checkDate)
+            {
+                break;
+            }
+        }
+
+        // Calculate longest streak (find longest sequence of consecutive days)
+        var longestStreak = 1; // At least 1 if there are entries
+        
+        if (allEntryDates.Count > 1)
+        {
+            // Sort dates in ascending order to find consecutive sequences
+            var sortedDates = allEntryDates.OrderBy(d => d).ToList();
+            var tempStreak = 1; // Start with 1 for the first entry
+            
+            for (int i = 1; i < sortedDates.Count; i++)
+            {
+                var prevDate = sortedDates[i - 1].Date;
+                var currDate = sortedDates[i].Date;
+                var daysDiff = (currDate - prevDate).Days;
+                
+                if (daysDiff == 1)
+                {
+                    // Consecutive day - increment streak
+                    tempStreak++;
+                }
+                else
+                {
+                    // Gap found - save this streak and reset
+                    longestStreak = Math.Max(longestStreak, tempStreak);
+                    tempStreak = 1; // Reset to 1 for the new sequence
+                }
+            }
+            
+            // Don't forget the last streak sequence
+            longestStreak = Math.Max(longestStreak, tempStreak);
+        }
+        
+        // Ensure longest streak is at least current streak (in case current streak is longer)
+        longestStreak = Math.Max(longestStreak, currentStreak);
+
+        streak.CurrentStreak = currentStreak;
+        streak.LongestStreak = longestStreak;
+        streak.LastEntryDate = allEntryDates.First();
+        streak.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+    }
 
     private async Task UpdateStreakAsync(int userId, DateTime entryDate)
     {
-        var streak = await GetOrCreateStreakAsync(userId);
-        var today = DateTime.UtcNow.Date;
-        var entryDateOnly = entryDate.Date;
-        var lastEntryDate = streak.LastEntryDate.Date;
-
-        if (entryDateOnly == today || entryDateOnly == today.AddDays(-1))
-        {
-            if (lastEntryDate == DateTime.MinValue.Date || lastEntryDate == entryDateOnly.AddDays(-1))
-            {
-                // Continue streak
-                streak.CurrentStreak++;
-                if (streak.CurrentStreak > streak.LongestStreak)
-                {
-                    streak.LongestStreak = streak.CurrentStreak;
-                }
-            }
-            else if (lastEntryDate < entryDateOnly.AddDays(-1))
-            {
-                // Reset streak
-                streak.CurrentStreak = 1;
-            }
-            // If lastEntryDate == entryDateOnly, it's an update, don't change streak
-
-            streak.LastEntryDate = entryDateOnly;
-            streak.UpdatedAt = DateTime.UtcNow;
-            await _context.SaveChangesAsync();
-        }
+        // Simply recalculate the streak from all entries
+        await RecalculateStreakAsync(userId);
     }
 
     public async Task<int> GetMissedDaysAsync(int userId)

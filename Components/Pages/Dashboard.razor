@@ -611,6 +611,9 @@ else
     {
         if (AuthService.CurrentUser == null) return;
 
+        // Recalculate streak to ensure it's up-to-date
+        await JournalService.RecalculateStreakAsync(AuthService.CurrentUser.Id);
+        
         // Load streak info
         streakInfo = await JournalService.GetOrCreateStreakAsync(AuthService.CurrentUser.Id);
         missedDays = await JournalService.GetMissedDaysAsync(AuthService.CurrentUser.Id);
