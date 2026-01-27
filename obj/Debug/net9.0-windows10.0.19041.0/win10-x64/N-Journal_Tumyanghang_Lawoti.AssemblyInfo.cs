@@ -17,7 +17,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("N-Journal_Tumyanghang_Lawoti")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0+8a95c054e823a203252a3523e03fe0288332f62e")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0+79c119a797ff7e84bff59cbe449f94b87543e9d0")]
 [assembly: System.Reflection.AssemblyProductAttribute("N-Journal_Tumyanghang_Lawoti")]
 [assembly: System.Reflection.AssemblyTitleAttribute("N-Journal_Tumyanghang_Lawoti")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

@@ -25,92 +25,174 @@ else
         <div class="row">
             <!-- Search & Filter Panel -->
             <div class="col-lg-4 col-md-5 mb-4">
-                <div class="card shadow-sm sticky-top" style="top: 20px;">
-                    <div class="card-header bg-primary text-white">
-                        <h5 class="mb-0">
-                            <span class="bi bi-funnel-fill me-2"></span>Search & Filter
-                            @if (filtersActive)
+                <div class="filter-panel card shadow-lg sticky-top">
+                    <div class="card-header filter-header">
+                        <div class="d-flex align-items-center justify-content-between">
+                            <h5 class="mb-0 fw-bold">
+                                <span class="bi bi-funnel-fill me-2"></span>Search & Filter
+                            </h5>
+                            @if (filtersActive || HasActiveFilters())
                             {
-                                <span class="badge bg-light text-primary ms-2">Active</span>
+                                <span class="badge filter-badge-active">
+                                    <span class="bi bi-check-circle me-1"></span>Active
+                                </span>
                             }
-                        </h5>
+                        </div>
                     </div>
-                    <div class="card-body">
+                    <div class="card-body filter-body">
                         <!-- Search Input -->
-                        <div class="mb-4">
-                            <label class="form-label fw-bold">
-                                <span class="bi bi-search me-1"></span>Search
+                        <div class="filter-section">
+                            <label class="filter-label">
+                                <span class="bi bi-search filter-icon"></span>Search Keywords
                             </label>
-                            <div class="input-group">
-                                <InputText class="form-control" @bind-Value="searchTerm" 
-                                          placeholder="Search title or content..." 
+                            <div class="input-group input-group-lg">
+                                <span class="input-group-text bg-white border-end-0">
+                                    <span class="bi bi-search text-muted"></span>
+                                </span>
+                                <InputText class="form-control border-start-0 ps-0" @bind-Value="searchTerm" 
+                                          placeholder="Search in titles and content..." 
                                           @onkeypress="HandleSearchKeyPress" />
-                                <button class="btn btn-primary" type="button" @onclick="SearchEntries" title="Search">
+                                <button class="btn btn-primary search-btn" type="button" @onclick="SearchEntries" title="Search">
                                     <span class="bi bi-search"></span>
                                 </button>
                             </div>
                         </div>
 
-                        <!-- Date Range -->
-                        <div class="mb-4">
-                            <label class="form-label fw-bold">
-                                <span class="bi bi-calendar-range me-1"></span>Date Range
-                            </label>
-                            <div class="mb-2">
-                                <label class="form-label small">Start Date</label>
-                                <InputDate class="form-control" @bind-Value="filterStartDate" />
+                        <!-- Active Filters Display -->
+                        @if (filtersActive || HasActiveFilters())
+                        {
+                            <div class="active-filters mb-3">
+                                <small class="text-muted d-block mb-2 fw-semibold">Active Filters:</small>
+                                <div class="d-flex flex-wrap gap-2">
+                                    @if (!string.IsNullOrWhiteSpace(searchTerm))
+                                    {
+                                        <span class="badge bg-primary filter-chip">
+                                            <span class="bi bi-search me-1"></span>@searchTerm
+                                            <button type="button" class="btn-close btn-close-white ms-2" style="font-size: 0.7em;" @onclick="() => { searchTerm = string.Empty; ApplyFilters(); }"></button>
+                                        </span>
+                                    }
+                                    @if (filterStartDate.HasValue)
+                                    {
+                                        <span class="badge bg-info filter-chip">
+                                            <span class="bi bi-calendar-event me-1"></span>From: @filterStartDate.Value.ToString("MMM dd")
+                                            <button type="button" class="btn-close btn-close-white ms-2" style="font-size: 0.7em;" @onclick="() => { filterStartDate = null; ApplyFilters(); }"></button>
+                                        </span>
+                                    }
+                                    @if (filterEndDate.HasValue)
+                                    {
+                                        <span class="badge bg-info filter-chip">
+                                            <span class="bi bi-calendar-event me-1"></span>To: @filterEndDate.Value.ToString("MMM dd")
+                                            <button type="button" class="btn-close btn-close-white ms-2" style="font-size: 0.7em;" @onclick="() => { filterEndDate = null; ApplyFilters(); }"></button>
+                                        </span>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(filterMood))
+                                    {
+                                        <span class="badge bg-success filter-chip">
+                                            <span class="bi bi-emoji-smile me-1"></span>@filterMood
+                                            <button type="button" class="btn-close btn-close-white ms-2" style="font-size: 0.7em;" @onclick="() => { filterMood = string.Empty; ApplyFilters(); }"></button>
+                                        </span>
+                                    }
+                                    @if (filterTagId.HasValue)
+                                    {
+                                        var selectedTag = availableTags.FirstOrDefault(t => t.Id == filterTagId.Value);
+                                        <span class="badge filter-chip" style="background-color: @(selectedTag?.Color ?? "#6c757d");">
+                                            <span class="bi bi-tag me-1"></span>@(selectedTag?.Name ?? "Tag")
+                                            <button type="button" class="btn-close btn-close-white ms-2" style="font-size: 0.7em;" @onclick="() => { filterTagId = null; filterTagIdString = string.Empty; ApplyFilters(); }"></button>
+                                        </span>
+                                    }
+                                </div>
                             </div>
-                            <div>
-                                <label class="form-label small">End Date</label>
-                                <InputDate class="form-control" @bind-Value="filterEndDate" />
+                        }
+
+                        <!-- Date Range -->
+                        <div class="filter-section">
+                            <label class="filter-label">
+                                <span class="bi bi-calendar-range filter-icon"></span>Date Range
+                            </label>
+                            <div class="row g-2">
+                                <div class="col-6">
+                                    <label class="form-label small text-muted mb-1">From</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-white border-end-0">
+                                            <span class="bi bi-calendar3 text-muted"></span>
+                                        </span>
+                                        <InputDate class="form-control border-start-0" @bind-Value="filterStartDate" />
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label small text-muted mb-1">To</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-white border-end-0">
+                                            <span class="bi bi-calendar3 text-muted"></span>
+                                        </span>
+                                        <InputDate class="form-control border-start-0" @bind-Value="filterEndDate" />
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
                         <!-- Mood Filter -->
-                        <div class="mb-4">
-                            <label class="form-label fw-bold">
-                                <span class="bi bi-emoji-smile me-1"></span>Mood
+                        <div class="filter-section">
+                            <label class="filter-label">
+                                <span class="bi bi-emoji-smile filter-icon"></span>Mood
                             </label>
-                            <InputSelect class="form-control" @bind-Value="filterMood">
-                                <option value="">All Moods</option>
-                                @foreach (var mood in availableMoods)
-                                {
-                                    <option value="@mood">@mood</option>
-                                }
-                            </InputSelect>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white border-end-0">
+                                    <span class="bi bi-emoji-smile text-muted"></span>
+                                </span>
+                                <InputSelect class="form-control border-start-0 ps-0" @bind-Value="filterMood">
+                                    <option value="">All Moods</option>
+                                    @foreach (var mood in availableMoods)
+                                    {
+                                        <option value="@mood">@mood</option>
+                                    }
+                                </InputSelect>
+                            </div>
                         </div>
 
                         <!-- Tag Filter -->
-                        <div class="mb-4">
-                            <label class="form-label fw-bold">
-                                <span class="bi bi-tags me-1"></span>Tag
+                        <div class="filter-section">
+                            <label class="filter-label">
+                                <span class="bi bi-tags filter-icon"></span>Tag
                             </label>
-                            <InputSelect class="form-control" @bind-Value="filterTagIdString" @bind:after="OnTagFilterChanged">
-                                <option value="">All Tags</option>
-                                @foreach (var tag in availableTags)
-                                {
-                                    <option value="@tag.Id">@tag.Name</option>
-                                }
-                            </InputSelect>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white border-end-0">
+                                    <span class="bi bi-tag text-muted"></span>
+                                </span>
+                                <InputSelect class="form-control border-start-0 ps-0" @bind-Value="filterTagIdString" @bind:after="OnTagFilterChanged">
+                                    <option value="">All Tags</option>
+                                    @foreach (var tag in availableTags)
+                                    {
+                                        <option value="@tag.Id">@tag.Name</option>
+                                    }
+                                </InputSelect>
+                            </div>
                         </div>
 
                         <!-- Action Buttons -->
-                        <div class="d-grid gap-2">
-                            <button class="btn btn-primary" @onclick="ApplyFilters">
-                                <span class="bi bi-funnel me-1"></span>Apply Filters
+                        <div class="filter-actions">
+                            <button class="btn btn-primary btn-lg w-100 mb-2 filter-apply-btn" @onclick="ApplyFilters">
+                                <span class="bi bi-funnel-fill me-2"></span>Apply Filters
                             </button>
-                            <button class="btn btn-outline-secondary" @onclick="ClearFilters">
-                                <span class="bi bi-x-circle me-1"></span>Clear All
+                            <button class="btn btn-outline-secondary w-100 filter-clear-btn" @onclick="ClearFilters">
+                                <span class="bi bi-x-circle me-2"></span>Clear All Filters
                             </button>
                         </div>
 
                         <!-- Results Summary -->
                         @if (filtersActive || HasActiveFilters())
                         {
-                            <div class="mt-4 p-3 bg-light rounded">
-                                <small class="text-muted d-block mb-1">Search Results</small>
-                                <h4 class="mb-0 text-primary">@totalEntries</h4>
-                                <small class="text-muted">entry@(totalEntries != 1 ? "ies" : "") found</small>
+                            <div class="results-summary">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <div>
+                                        <small class="text-muted d-block mb-1">Results Found</small>
+                                        <h3 class="mb-0 text-primary fw-bold">@totalEntries</h3>
+                                        <small class="text-muted">entry@(totalEntries != 1 ? "ies" : "")</small>
+                                    </div>
+                                    <div class="results-icon">
+                                        <span class="bi bi-file-earmark-text display-4 text-primary opacity-25"></span>
+                                    </div>
+                                </div>
                             </div>
                         }
                     </div>
@@ -319,8 +401,157 @@ else
         text-overflow: ellipsis;
     }
 
+    .filter-panel {
+        border: none;
+        border-radius: 12px;
+        overflow: hidden;
+        transition: transform 0.2s, box-shadow 0.3s;
+    }
+
+    .filter-panel:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 16px rgba(0,0,0,0.15) !important;
+    }
+
+    .filter-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 1.25rem 1.5rem;
+    }
+
+    .filter-badge-active {
+        background-color: rgba(255, 255, 255, 0.25);
+        color: white;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        padding: 0.35rem 0.75rem;
+        font-weight: 500;
+    }
+
+    .filter-body {
+        padding: 1.5rem;
+        background-color: #f8f9fa;
+    }
+
+    .filter-section {
+        margin-bottom: 1.5rem;
+        padding-bottom: 1.5rem;
+        border-bottom: 1px solid #e9ecef;
+    }
+
+    .filter-section:last-of-type {
+        border-bottom: none;
+        margin-bottom: 1rem;
+    }
+
+    .filter-label {
+        display: flex;
+        align-items: center;
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: 0.75rem;
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .filter-icon {
+        margin-right: 0.5rem;
+        color: #667eea;
+        font-size: 1rem;
+    }
+
+    .input-group-text {
+        border-color: #dee2e6;
+    }
+
+    .form-control:focus,
+    .form-select:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+    }
+
+    .search-btn {
+        border-left: none;
+        padding: 0.5rem 1rem;
+    }
+
+    .filter-actions {
+        margin-top: 1.5rem;
+        padding-top: 1.5rem;
+        border-top: 2px solid #e9ecef;
+    }
+
+    .filter-apply-btn {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+        transition: all 0.3s;
+    }
+
+    .filter-apply-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+
+    .filter-clear-btn {
+        font-weight: 500;
+        transition: all 0.3s;
+    }
+
+    .filter-clear-btn:hover {
+        background-color: #f8f9fa;
+        border-color: #dc3545;
+        color: #dc3545;
+    }
+
+    .active-filters {
+        background: white;
+        padding: 1rem;
+        border-radius: 8px;
+        border: 1px solid #e9ecef;
+        margin-bottom: 1.5rem;
+    }
+
+    .filter-chip {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.5rem 0.75rem;
+        font-size: 0.85rem;
+        font-weight: 500;
+        border-radius: 20px;
+        transition: all 0.2s;
+    }
+
+    .filter-chip:hover {
+        transform: scale(1.05);
+    }
+
+    .filter-chip .btn-close {
+        opacity: 0.8;
+        font-size: 0.65rem;
+    }
+
+    .filter-chip .btn-close:hover {
+        opacity: 1;
+    }
+
+    .results-summary {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        padding: 1.5rem;
+        border-radius: 10px;
+        margin-top: 1.5rem;
+        border: 1px solid #dee2e6;
+    }
+
+    .results-icon {
+        opacity: 0.1;
+    }
+
     .sticky-top {
         z-index: 1020;
+        top: 20px;
     }
 
     .card {
@@ -330,6 +561,22 @@ else
     .card:hover {
         transform: translateY(-2px);
         box-shadow: 0 4px 8px rgba(0,0,0,0.1) !important;
+    }
+
+    /* Input group improvements */
+    .input-group-lg .form-control,
+    .input-group-lg .form-select {
+        padding: 0.75rem 1rem;
+        font-size: 0.95rem;
+    }
+
+    .input-group-lg .input-group-text {
+        padding: 0.75rem 1rem;
+    }
+
+    /* Date input styling */
+    .input-group .form-control.border-start-0 {
+        padding-left: 0.5rem;
     }
 </style>
 

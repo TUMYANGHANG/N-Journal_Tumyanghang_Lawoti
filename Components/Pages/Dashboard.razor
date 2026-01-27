@@ -3,7 +3,10 @@
 @inject JournalService JournalService
 @inject PdfExportService PdfExportService
 @inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
 @using N_Journal_Tumyanghang_Lawoti.Models
+@using Microsoft.Maui.Storage
+@using System.IO
 
 <PageTitle>Dashboard - N-Journal</PageTitle>
 
@@ -226,22 +229,39 @@ else
                         <h5>Export Journals</h5>
                     </div>
                     <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-4">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
                                 <label class="form-label">Start Date</label>
                                 <InputDate class="form-control" @bind-Value="exportStartDate" />
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-6">
                                 <label class="form-label">End Date</label>
                                 <InputDate class="form-control" @bind-Value="exportEndDate" />
                             </div>
-                            <div class="col-md-4 d-flex align-items-end">
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Filename</label>
+                                <div class="input-group">
+                                    <InputText class="form-control" @bind-Value="exportFileName" placeholder="journal_export" />
+                                    <span class="input-group-text">.pdf</span>
+                                </div>
+                                <small class="text-muted">Enter filename without extension</small>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Save Location (Optional)</label>
+                                <InputText class="form-control" @bind-Value="exportLocation" placeholder="Leave empty for default Downloads folder" />
+                                <small class="text-muted">Enter full folder path (e.g., C:\Users\YourName\Documents) or leave empty for Downloads</small>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-12">
                                 <button class="btn btn-primary w-100" @onclick="ExportToPdf" disabled="@isExporting">
                                     @if (isExporting)
                                     {
                                         <span class="spinner-border spinner-border-sm me-2"></span>
                                     }
-                                    Export to PDF
+                                    <span class="bi bi-file-pdf me-2"></span>Export to PDF
                                 </button>
                             </div>
                         </div>
@@ -266,6 +286,8 @@ else
     private List<(DateTime Date, int WordCount)> wordCountTrends = new();
     private DateTime? exportStartDate = DateTime.Today.AddDays(-30);
     private DateTime? exportEndDate = DateTime.Today;
+    private string exportFileName = "journal_export";
+    private string exportLocation = string.Empty;
     private bool isExporting = false;
     private string exportMessage = string.Empty;
     private bool exportSuccess = false;
@@ -293,6 +315,7 @@ else
         wordCountTrends = await JournalService.GetWordCountTrendsAsync(AuthService.CurrentUser.Id, 30);
     }
 
+
     private async Task ExportToPdf()
     {
         if (AuthService.CurrentUser == null || !exportStartDate.HasValue || !exportEndDate.HasValue)
@@ -302,8 +325,16 @@ else
             return;
         }
 
+        if (string.IsNullOrWhiteSpace(exportFileName))
+        {
+            exportMessage = "Please enter a filename.";
+            exportSuccess = false;
+            return;
+        }
+
         isExporting = true;
         exportMessage = string.Empty;
+        exportSuccess = false;
 
         try
         {
@@ -323,10 +354,62 @@ else
             // Generate PDF
             var pdfBytes = PdfExportService.GeneratePdf(entries, AuthService.CurrentUser?.Username ?? "User");
             
-            // Save PDF (platform-specific implementation would go here)
-            // For now, we'll just confirm the export
-            exportMessage = $"PDF exported successfully! {entries.Count} entries exported. ({pdfBytes.Length / 1024} KB)";
+            // Prepare filename
+            var fileName = exportFileName.Trim();
+            if (!fileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
+            {
+                fileName += ".pdf";
+            }
+
+            // Sanitize filename (remove invalid characters)
+            var invalidChars = Path.GetInvalidFileNameChars();
+            fileName = string.Join("_", fileName.Split(invalidChars, StringSplitOptions.RemoveEmptyEntries));
+
+            // Determine save path
+            string filePath;
+            if (!string.IsNullOrEmpty(exportLocation) && Directory.Exists(exportLocation))
+            {
+                filePath = Path.Combine(exportLocation, fileName);
+            }
+            else
+            {
+                // Use default location (Downloads folder or app data directory)
+                string defaultPath;
+                try
+                {
+                    var downloadsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
+                    if (Directory.Exists(downloadsPath))
+                    {
+                        defaultPath = downloadsPath;
+                    }
+                    else
+                    {
+                        defaultPath = FileSystem.AppDataDirectory;
+                    }
+                }
+                catch
+                {
+                    defaultPath = FileSystem.AppDataDirectory;
+                }
+                filePath = Path.Combine(defaultPath, fileName);
+            }
+
+            // Ensure directory exists
+            var directory = Path.GetDirectoryName(filePath);
+            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            // Save PDF file
+            await System.IO.File.WriteAllBytesAsync(filePath, pdfBytes);
+            
+            exportMessage = $"PDF exported successfully! {entries.Count} entries exported to: {filePath} ({pdfBytes.Length / 1024} KB)";
             exportSuccess = true;
+
+            // Clear filename and location after successful export
+            exportFileName = "journal_export";
+            exportLocation = string.Empty;
         }
         catch (Exception ex)
         {
@@ -336,6 +419,7 @@ else
         finally
         {
             isExporting = false;
+            StateHasChanged();
         }
     }
 
