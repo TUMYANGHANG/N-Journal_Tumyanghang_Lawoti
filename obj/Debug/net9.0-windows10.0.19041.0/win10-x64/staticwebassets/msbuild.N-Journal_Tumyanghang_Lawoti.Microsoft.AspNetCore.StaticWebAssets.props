@@ -97,7 +97,7 @@
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <FileLength>5481</FileLength>
-      <LastWriteTime>Mon, 22 Dec 2025 05:36:52 GMT</LastWriteTime>
+      <LastWriteTime>Sat, 03 Jan 2026 17:38:02 GMT</LastWriteTime>
       <OriginalItemSpec>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\staticwebassets\N-Journal_Tumyanghang_Lawoti.styles.css'))</OriginalItemSpec>
     </StaticWebAsset>
   </ItemGroup>

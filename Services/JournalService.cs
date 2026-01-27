@@ -9,9 +9,9 @@ public class JournalService
     private readonly JournalDbContext _context;
 
     public JournalService(JournalDbContext context)
-    {
-        _context = context;
-    }
+        {
+            _context = context;
+        }
 
     // Journal Entry Management
     public async Task<JournalEntry?> GetEntryByDateAsync(int userId, DateTime date)
@@ -50,13 +50,30 @@ public class JournalService
             .CountAsync();
     }
 
-    public async Task<JournalEntry> CreateOrUpdateEntryAsync(int userId, DateTime entryDate, string title, 
+        public async Task<JournalEntry> CreateOrUpdateEntryAsync(int userId, DateTime entryDate, string title, 
         string content, string? markdownContent, string primaryMood, string? secondaryMood1, 
         string? secondaryMood2, List<int>? tagIds = null)
     {
         var dateOnly = entryDate.Date;
         var entry = await GetEntryByDateAsync(userId, dateOnly);
         var isNewEntry = entry == null;
+
+        // Prevent creating new entries for any date other than today
+        var today = DateTime.UtcNow.Date;
+        if (isNewEntry)
+        {
+            if (dateOnly != today)
+            {
+                throw new InvalidOperationException("New entries can only be created for today's date. Past or future dates are not allowed.");
+            }
+
+            // Double-check: Prevent duplicate entries (should not happen due to unique constraint, but add explicit check)
+            var duplicateCheck = await GetEntryByDateAsync(userId, dateOnly);
+            if (duplicateCheck != null)
+            {
+                throw new InvalidOperationException("An entry already exists for this date. You can only create one entry per day.");
+            }
+        }
 
         if (entry == null)
         {
@@ -148,7 +165,9 @@ public class JournalService
 
         if (!string.IsNullOrWhiteSpace(searchTerm))
         {
-            query = query.Where(e => e.Title.Contains(searchTerm) || e.Content.Contains(searchTerm));
+            // Case-insensitive search using EF.Functions.Like (SQLite LIKE is case-insensitive)
+            var searchPattern = $"%{searchTerm}%";
+            query = query.Where(e => EF.Functions.Like(e.Title, searchPattern) || EF.Functions.Like(e.Content, searchPattern));
         }
 
         if (startDate.HasValue)
@@ -177,6 +196,44 @@ public class JournalService
             .Take(take)
             .ToListAsync();
     }
+
+        // Search count (for pagination with filters)
+        public async Task<int> SearchEntriesCountAsync(int userId, string? searchTerm = null,
+            DateTime? startDate = null, DateTime? endDate = null, string? mood = null, int? tagId = null)
+        {
+            var query = _context.JournalEntries
+                .Where(e => e.UserId == userId)
+                .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                // Case-insensitive search using EF.Functions.Like (SQLite LIKE is case-insensitive)
+                var searchPattern = $"%{searchTerm}%";
+                query = query.Where(e => EF.Functions.Like(e.Title, searchPattern) || EF.Functions.Like(e.Content, searchPattern));
+            }
+
+            if (startDate.HasValue)
+            {
+                query = query.Where(e => e.EntryDate >= startDate.Value.Date);
+            }
+
+            if (endDate.HasValue)
+            {
+                query = query.Where(e => e.EntryDate <= endDate.Value.Date);
+            }
+
+            if (!string.IsNullOrWhiteSpace(mood))
+            {
+                query = query.Where(e => e.PrimaryMood == mood || e.SecondaryMood1 == mood || e.SecondaryMood2 == mood);
+            }
+
+            if (tagId.HasValue)
+            {
+                query = query.Where(e => e.JournalEntryTags.Any(jet => jet.TagId == tagId.Value));
+            }
+
+            return await query.CountAsync();
+        }
 
     // Tag Management
     public async Task<List<Tag>> GetTagsAsync(int userId, bool includePreBuilt = true)

@@ -60,13 +60,25 @@ else
                                         <div class="calendar-row">
                                             @foreach (var day in week)
                                             {
-                                                <div class="calendar-cell @GetDayClass(day)" @onclick="() => SelectDate(day)">
-                                                    <div class="day-number">@day.Day</div>
-                                                    @if (HasEntry(day))
-                                                    {
-                                                        <div class="entry-indicator" title="@GetEntryTitle(day)"></div>
-                                                    }
-                                                </div>
+                                                var hasEntry = HasEntry(day);
+                                                var isToday = day.Date == DateTime.Today;
+                                                var isClickable = hasEntry || isToday;
+                                                @if (isClickable)
+                                                {
+                                                    <div class="calendar-cell @GetDayClass(day)" @onclick="() => SelectDate(day)">
+                                                        <div class="day-number">@day.Day</div>
+                                                        @if (hasEntry)
+                                                        {
+                                                            <div class="entry-indicator" title="@GetEntryTitle(day)"></div>
+                                                        }
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <div class="calendar-cell @GetDayClass(day) no-entry">
+                                                        <div class="day-number">@day.Day</div>
+                                                    </div>
+                                                }
                                             }
                                         </div>
                                     }
@@ -114,8 +126,15 @@ else
                             }
                             else
                             {
-                                <p class="text-muted">No entry for this date.</p>
-                                <button class="btn btn-primary" @onclick="() => NavigateToJournal(selectedDate.Value)">Create Entry</button>
+                                @if (selectedDate.Value.Date == DateTime.Today)
+                                {
+                                    <p class="text-muted">No entry for today. You can create a new entry.</p>
+                                    <button class="btn btn-primary" @onclick="() => NavigateToJournal(selectedDate.Value)">Create Entry</button>
+                                }
+                                else
+                                {
+                                    <p class="text-muted">No entry for this date. You can only create entries for today's date.</p>
+                                }
                             }
                         </div>
                     </div>
@@ -149,6 +168,26 @@ else
 
     .calendar-cell:hover {
         background-color: #f8f9fa;
+    }
+
+    .calendar-cell.no-entry {
+        cursor: not-allowed;
+        opacity: 0.5;
+        background-color: #f8f9fa;
+    }
+
+    .calendar-cell.no-entry:hover {
+        background-color: #f8f9fa;
+    }
+
+    .calendar-cell.no-entry.today {
+        opacity: 1;
+        cursor: pointer;
+        background-color: #e7f3ff;
+    }
+
+    .calendar-cell.no-entry.today:hover {
+        background-color: #d0e7ff;
     }
 
     .calendar-header .calendar-cell {
@@ -308,6 +347,16 @@ else
 
     private Task SelectDate(DateTime date)
     {
+        // Only allow selection if there's an entry or it's today (can create entry for today)
+        var hasEntry = HasEntry(date);
+        var isToday = date.Date == DateTime.Today;
+        
+        if (!hasEntry && !isToday)
+        {
+            // Don't select dates without entries (except today)
+            return Task.CompletedTask;
+        }
+
         selectedDate = date;
         if (entriesByDate.TryGetValue(date.Date, out var entry))
         {

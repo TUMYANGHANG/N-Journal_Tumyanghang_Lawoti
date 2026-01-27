@@ -1,0 +1,589 @@
+@page "/search"
+@inject AuthService AuthService
+@inject JournalService JournalService
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+@using N_Journal_Tumyanghang_Lawoti.Models
+@using Markdig
+
+<PageTitle>Search Dashboard - N-Journal</PageTitle>
+
+@if (!AuthService.IsAuthenticated)
+{
+    <RedirectToLogin />
+}
+else
+{
+    <div class="container-fluid mt-4">
+        <div class="row">
+            <div class="col-12 mb-4">
+                <h1 class="mb-2">Search Dashboard</h1>
+                <p class="text-muted">Search and filter your journal entries with advanced options</p>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Search & Filter Panel -->
+            <div class="col-lg-4 col-md-5 mb-4">
+                <div class="card shadow-sm sticky-top" style="top: 20px;">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">
+                            <span class="bi bi-funnel-fill me-2"></span>Search & Filter
+                            @if (filtersActive)
+                            {
+                                <span class="badge bg-light text-primary ms-2">Active</span>
+                            }
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- Search Input -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">
+                                <span class="bi bi-search me-1"></span>Search
+                            </label>
+                            <div class="input-group">
+                                <InputText class="form-control" @bind-Value="searchTerm" 
+                                          placeholder="Search title or content..." 
+                                          @onkeypress="HandleSearchKeyPress" />
+                                <button class="btn btn-primary" type="button" @onclick="SearchEntries" title="Search">
+                                    <span class="bi bi-search"></span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Date Range -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">
+                                <span class="bi bi-calendar-range me-1"></span>Date Range
+                            </label>
+                            <div class="mb-2">
+                                <label class="form-label small">Start Date</label>
+                                <InputDate class="form-control" @bind-Value="filterStartDate" />
+                            </div>
+                            <div>
+                                <label class="form-label small">End Date</label>
+                                <InputDate class="form-control" @bind-Value="filterEndDate" />
+                            </div>
+                        </div>
+
+                        <!-- Mood Filter -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">
+                                <span class="bi bi-emoji-smile me-1"></span>Mood
+                            </label>
+                            <InputSelect class="form-control" @bind-Value="filterMood">
+                                <option value="">All Moods</option>
+                                @foreach (var mood in availableMoods)
+                                {
+                                    <option value="@mood">@mood</option>
+                                }
+                            </InputSelect>
+                        </div>
+
+                        <!-- Tag Filter -->
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">
+                                <span class="bi bi-tags me-1"></span>Tag
+                            </label>
+                            <InputSelect class="form-control" @bind-Value="filterTagIdString" @bind:after="OnTagFilterChanged">
+                                <option value="">All Tags</option>
+                                @foreach (var tag in availableTags)
+                                {
+                                    <option value="@tag.Id">@tag.Name</option>
+                                }
+                            </InputSelect>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-primary" @onclick="ApplyFilters">
+                                <span class="bi bi-funnel me-1"></span>Apply Filters
+                            </button>
+                            <button class="btn btn-outline-secondary" @onclick="ClearFilters">
+                                <span class="bi bi-x-circle me-1"></span>Clear All
+                            </button>
+                        </div>
+
+                        <!-- Results Summary -->
+                        @if (filtersActive || HasActiveFilters())
+                        {
+                            <div class="mt-4 p-3 bg-light rounded">
+                                <small class="text-muted d-block mb-1">Search Results</small>
+                                <h4 class="mb-0 text-primary">@totalEntries</h4>
+                                <small class="text-muted">entry@(totalEntries != 1 ? "ies" : "") found</small>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results Panel -->
+            <div class="col-lg-8 col-md-7">
+                <!-- Results Header -->
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h4 class="mb-1">Search Results</h4>
+                                @if (filtersActive || HasActiveFilters())
+                                {
+                                    <p class="text-muted mb-0 small">
+                                        Showing @((currentPage - 1) * pageSize + 1)-@(Math.Min(currentPage * pageSize, totalEntries)) of @totalEntries entries
+                                    </p>
+                                }
+                                else
+                                {
+                                    <p class="text-muted mb-0 small">Total: @totalEntries entry@(totalEntries != 1 ? "ies" : "")</p>
+                                }
+                            </div>
+                            <div>
+                                <select class="form-select form-select-sm" @bind="pageSize" @bind:after="OnPageSizeChanged">
+                                    <option value="10">10 per page</option>
+                                    <option value="20">20 per page</option>
+                                    <option value="50">50 per page</option>
+                                    <option value="100">100 per page</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                @if (isLoading)
+                {
+                    <div class="card">
+                        <div class="card-body text-center py-5">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p class="mt-3 text-muted">Searching entries...</p>
+                        </div>
+                    </div>
+                }
+                else if (entries.Any())
+                {
+                    <!-- Entry Cards -->
+                    @foreach (var entry in entries)
+                    {
+                        <div class="card mb-3 shadow-sm">
+                            <div class="card-header bg-light">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div class="flex-grow-1">
+                                        <h5 class="card-title mb-1">@entry.Title</h5>
+                                        <div class="d-flex align-items-center gap-3 flex-wrap">
+                                            <small class="text-muted">
+                                                <span class="bi bi-calendar3 me-1"></span>
+                                                @entry.EntryDate.ToString("MMMM dd, yyyy")
+                                            </small>
+                                            <small class="text-muted">
+                                                <span class="bi bi-file-text me-1"></span>
+                                                @entry.WordCount words
+                                            </small>
+                                            @if (entry.UpdatedAt.HasValue)
+                                            {
+                                                <small class="text-muted">
+                                                    <span class="bi bi-pencil me-1"></span>
+                                                    Updated @entry.UpdatedAt.Value.ToString("MMM dd, yyyy")
+                                                </small>
+                                            }
+                                        </div>
+                                    </div>
+                                    <div class="d-flex gap-2">
+                                        <button class="btn btn-sm btn-outline-primary" @onclick="() => NavigateToEntry(entry.EntryDate)" title="View/Edit">
+                                            <span class="bi bi-eye"></span>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteEntry(entry)" disabled="@(isDeleting && deletingEntryId == entry.Id)" title="Delete">
+                                            @if (isDeleting && deletingEntryId == entry.Id)
+                                            {
+                                                <span class="spinner-border spinner-border-sm"></span>
+                                            }
+                                            else
+                                            {
+                                                <span class="bi bi-trash"></span>
+                                            }
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <!-- Moods -->
+                                <div class="mb-2">
+                                    <span class="badge bg-primary me-1">@entry.PrimaryMood</span>
+                                    @if (!string.IsNullOrEmpty(entry.SecondaryMood1))
+                                    {
+                                        <span class="badge bg-secondary me-1">@entry.SecondaryMood1</span>
+                                    }
+                                    @if (!string.IsNullOrEmpty(entry.SecondaryMood2))
+                                    {
+                                        <span class="badge bg-secondary">@entry.SecondaryMood2</span>
+                                    }
+                                </div>
+
+                                <!-- Tags -->
+                                @if (entry.JournalEntryTags.Any())
+                                {
+                                    <div class="mb-3">
+                                        @foreach (var entryTag in entry.JournalEntryTags)
+                                        {
+                                            <span class="badge me-1" style="background-color: @entryTag.Tag.Color;">@entryTag.Tag.Name</span>
+                                        }
+                                    </div>
+                                }
+
+                                <!-- Content Preview -->
+                                <div class="entry-preview">
+                                    @((MarkupString)GetMarkdownPreview(entry.Content.Length > 300 ? entry.Content.Substring(0, 300) + "..." : entry.Content))
+                                </div>
+
+                                <!-- Highlight search term if present -->
+                                @if (!string.IsNullOrWhiteSpace(searchTerm))
+                                {
+                                    <div class="mt-2">
+                                        <small class="text-muted">
+                                            <span class="bi bi-info-circle me-1"></span>
+                                            Matches search: "@searchTerm"
+                                        </small>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Pagination -->
+                    @if (totalPages > 1)
+                    {
+                        <nav aria-label="Search results pagination">
+                            <ul class="pagination justify-content-center">
+                                <li class="page-item @(currentPage == 1 ? "disabled" : "")">
+                                    <button class="page-link" @onclick="() => ChangePage(currentPage - 1)">
+                                        <span class="bi bi-chevron-left"></span> Previous
+                                    </button>
+                                </li>
+                                @for (int i = Math.Max(1, currentPage - 2); i <= Math.Min(totalPages, currentPage + 2); i++)
+                                {
+                                    <li class="page-item @(i == currentPage ? "active" : "")">
+                                        <button class="page-link" @onclick="() => ChangePage(i)">@i</button>
+                                    </li>
+                                }
+                                @if (currentPage + 2 < totalPages)
+                                {
+                                    <li class="page-item disabled">
+                                        <span class="page-link">...</span>
+                                    </li>
+                                    <li class="page-item">
+                                        <button class="page-link" @onclick="() => ChangePage(totalPages)">@totalPages</button>
+                                    </li>
+                                }
+                                <li class="page-item @(currentPage == totalPages ? "disabled" : "")">
+                                    <button class="page-link" @onclick="() => ChangePage(currentPage + 1)">
+                                        Next <span class="bi bi-chevron-right"></span>
+                                    </button>
+                                </li>
+                            </ul>
+                        </nav>
+                    }
+                }
+                else
+                {
+                    <div class="card">
+                        <div class="card-body text-center py-5">
+                            @if (filtersActive || HasActiveFilters())
+                            {
+                                <span class="bi bi-search display-1 text-muted d-block mb-3"></span>
+                                <h5>No entries found</h5>
+                                <p class="text-muted">No journal entries match your search criteria.</p>
+                                <button class="btn btn-outline-primary" @onclick="ClearFilters">
+                                    <span class="bi bi-x-circle me-1"></span>Clear Filters
+                                </button>
+                            }
+                            else
+                            {
+                                <span class="bi bi-journal-text display-1 text-muted d-block mb-3"></span>
+                                <h5>No entries yet</h5>
+                                <p class="text-muted">Start writing your first journal entry!</p>
+                                <button class="btn btn-primary" @onclick="NavigateToJournal">
+                                    <span class="bi bi-plus-circle me-1"></span>Create Entry
+                                </button>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .entry-preview {
+        max-height: 150px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .sticky-top {
+        z-index: 1020;
+    }
+
+    .card {
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1) !important;
+    }
+</style>
+
+@code {
+    private List<JournalEntry> entries = new();
+    private List<Tag> availableTags = new();
+    private List<string> availableMoods = new() { "Happy", "Sad", "Angry", "Anxious", "Excited", "Calm", "Tired", "Energetic", "Grateful", "Frustrated", "Content", "Lonely" };
+
+    // Filters
+    private string searchTerm = string.Empty;
+    private DateTime? filterStartDate;
+    private DateTime? filterEndDate;
+    private string filterMood = string.Empty;
+    private int? filterTagId;
+    private string filterTagIdString = string.Empty;
+    private bool filtersActive = false;
+    private bool isLoading = false;
+
+    // Pagination
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private int totalPages = 1;
+    private int totalEntries = 0;
+
+    // Delete state
+    private bool isDeleting = false;
+    private int? deletingEntryId = null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthService.CurrentUser != null)
+        {
+            await LoadData();
+        }
+    }
+
+    private async Task LoadData()
+    {
+        if (AuthService.CurrentUser == null) return;
+
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            availableTags = await JournalService.GetTagsAsync(AuthService.CurrentUser.Id);
+            await LoadEntries();
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadEntries()
+    {
+        if (AuthService.CurrentUser == null) return;
+
+        // If there's a search term or any filters, use search instead
+        if (!string.IsNullOrWhiteSpace(searchTerm) || HasActiveFilters())
+        {
+            await SearchEntries();
+            return;
+        }
+
+        totalEntries = await JournalService.GetEntriesCountAsync(AuthService.CurrentUser.Id);
+        totalPages = Math.Max(1, (int)Math.Ceiling(totalEntries / (double)pageSize));
+
+        entries = await JournalService.GetEntriesAsync(AuthService.CurrentUser.Id, (currentPage - 1) * pageSize, pageSize);
+    }
+
+    private async Task SearchEntries()
+    {
+        if (AuthService.CurrentUser == null) return;
+
+        isLoading = true;
+        currentPage = 1;
+        filtersActive = HasActiveFilters();
+        StateHasChanged();
+
+        try
+        {
+            // Get total count for pagination with filters
+            totalEntries = await JournalService.SearchEntriesCountAsync(
+                AuthService.CurrentUser.Id,
+                string.IsNullOrWhiteSpace(searchTerm) ? null : searchTerm,
+                filterStartDate,
+                filterEndDate,
+                string.IsNullOrWhiteSpace(filterMood) ? null : filterMood,
+                filterTagId
+            );
+            totalPages = Math.Max(1, (int)Math.Ceiling(totalEntries / (double)pageSize));
+
+            // Get entries matching search and filters
+            entries = await JournalService.SearchEntriesAsync(
+                AuthService.CurrentUser.Id,
+                string.IsNullOrWhiteSpace(searchTerm) ? null : searchTerm,
+                filterStartDate,
+                filterEndDate,
+                string.IsNullOrWhiteSpace(filterMood) ? null : filterMood,
+                filterTagId,
+                (currentPage - 1) * pageSize,
+                pageSize
+            );
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error searching entries: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ApplyFilters()
+    {
+        await SearchEntries();
+    }
+
+    private async Task ClearFilters()
+    {
+        searchTerm = string.Empty;
+        filterStartDate = null;
+        filterEndDate = null;
+        filterMood = string.Empty;
+        filterTagId = null;
+        filterTagIdString = string.Empty;
+        filtersActive = false;
+        currentPage = 1;
+        isLoading = true;
+        StateHasChanged();
+
+        await LoadEntries();
+        
+        isLoading = false;
+        StateHasChanged();
+    }
+
+    private bool HasActiveFilters()
+    {
+        return !string.IsNullOrWhiteSpace(searchTerm) ||
+               filterStartDate.HasValue ||
+               filterEndDate.HasValue ||
+               !string.IsNullOrWhiteSpace(filterMood) ||
+               filterTagId.HasValue;
+    }
+
+    private void OnTagFilterChanged()
+    {
+        if (string.IsNullOrWhiteSpace(filterTagIdString) || !int.TryParse(filterTagIdString, out int tagId))
+        {
+            filterTagId = null;
+            filterTagIdString = string.Empty;
+        }
+        else
+        {
+            filterTagId = tagId;
+        }
+    }
+
+    private async Task HandleSearchKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SearchEntries();
+        }
+    }
+
+    private async Task ChangePage(int page)
+    {
+        if (page >= 1 && page <= totalPages)
+        {
+            currentPage = page;
+            if (filtersActive || HasActiveFilters())
+            {
+                await SearchEntries();
+            }
+            else
+            {
+                await LoadEntries();
+            }
+        }
+    }
+
+    private async Task OnPageSizeChanged()
+    {
+        currentPage = 1;
+        if (filtersActive || HasActiveFilters())
+        {
+            await SearchEntries();
+        }
+        else
+        {
+            await LoadEntries();
+        }
+    }
+
+    private void NavigateToEntry(DateTime entryDate)
+    {
+        Navigation.NavigateTo($"/journal?date={entryDate:yyyy-MM-dd}");
+    }
+
+    private void NavigateToJournal()
+    {
+        Navigation.NavigateTo("/journal");
+    }
+
+    private async Task DeleteEntry(JournalEntry entry)
+    {
+        if (AuthService.CurrentUser == null) return;
+
+        if (!await JSRuntime.InvokeAsync<bool>("confirm", $"Are you sure you want to delete the entry '{entry.Title}'? This action cannot be undone."))
+        {
+            return;
+        }
+
+        isDeleting = true;
+        deletingEntryId = entry.Id;
+        StateHasChanged();
+
+        try
+        {
+            var success = await JournalService.DeleteEntryAsync(entry.Id, AuthService.CurrentUser.Id);
+            if (success)
+            {
+                if (filtersActive || HasActiveFilters())
+                {
+                    await SearchEntries();
+                }
+                else
+                {
+                    await LoadEntries();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Error deleting entry: {ex.Message}");
+        }
+        finally
+        {
+            isDeleting = false;
+            deletingEntryId = null;
+            StateHasChanged();
+        }
+    }
+
+    private string GetMarkdownPreview(string content)
+    {
+        if (string.IsNullOrWhiteSpace(content)) return "<p class='text-muted'>No content</p>";
+        var pipeline = new MarkdownPipelineBuilder().UseAdvancedExtensions().Build();
+        return Markdown.ToHtml(content, pipeline);
+    }
+}

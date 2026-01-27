@@ -43,53 +43,8 @@ else
 {
     <div class="container mt-4">
         <div class="row">
-            <!-- Search and Filter Sidebar -->
-            <div class="col-md-3 mb-4">
-                <div class="card">
-                    <div class="card-header">
-                        <h5>Search & Filter</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="mb-3">
-                            <label class="form-label">Search</label>
-                            <InputText class="form-control" @bind-Value="searchTerm" placeholder="Title or content..." />
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Start Date</label>
-                            <InputDate class="form-control" @bind-Value="filterStartDate" />
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">End Date</label>
-                            <InputDate class="form-control" @bind-Value="filterEndDate" />
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Mood</label>
-                            <InputSelect class="form-control" @bind-Value="filterMood">
-                                <option value="">All Moods</option>
-                                @foreach (var mood in availableMoods)
-                                {
-                                    <option value="@mood">@mood</option>
-                                }
-                            </InputSelect>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Tag</label>
-                            <InputSelect class="form-control" @bind-Value="filterTagId">
-                                <option value="">All Tags</option>
-                                @foreach (var tag in availableTags)
-                                {
-                                    <option value="@tag.Id">@tag.Name</option>
-                                }
-                            </InputSelect>
-                        </div>
-                        <button class="btn btn-primary w-100 mb-2" @onclick="ApplyFilters">Apply Filters</button>
-                        <button class="btn btn-secondary w-100" @onclick="ClearFilters">Clear</button>
-                    </div>
-                </div>
-            </div>
-
             <!-- Main Content -->
-            <div class="col-md-9">
+            <div class="col-12">
                 @if (showEditor)
                 {
                     <!-- Entry Editor -->
@@ -99,6 +54,12 @@ else
                             <button class="btn btn-sm btn-secondary" @onclick="CancelEdit">Cancel</button>
                         </div>
                         <div class="card-body">
+                            @if (currentEntry == null)
+                            {
+                                <div class="alert alert-info mb-3">
+                                    <strong>Note:</strong> You can only create entries for today's date (@DateTime.Today.ToString("MMMM dd, yyyy")). Only one entry per day is allowed.
+                                </div>
+                            }
                             <EditForm Model="@entryModel" OnValidSubmit="SaveEntry">
                                 <DataAnnotationsValidator />
                                 
@@ -216,10 +177,18 @@ else
                 {
                     <!-- Entry List -->
                     <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h2>My Journal Entries</h2>
-                        <button class="btn btn-primary" @onclick="CreateNewEntry">
-                            <span class="bi bi-plus-circle"></span> New Entry
-                        </button>
+                        <div>
+                            <h2 class="mb-0">My Journal Entries</h2>
+                            <small class="text-muted">Total: @totalEntries entry@(totalEntries != 1 ? "ies" : "")</small>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <a href="/search" class="btn btn-outline-primary">
+                                <span class="bi bi-search"></span> Search & Filter
+                            </a>
+                            <button class="btn btn-primary" @onclick="CreateNewEntry">
+                                <span class="bi bi-plus-circle"></span> New Entry
+                            </button>
+                        </div>
                     </div>
 
                     @if (entries.Any())
@@ -257,7 +226,14 @@ else
                                     <div class="mt-2">
                                         <small class="text-muted">@entry.WordCount words</small>
                                         <div class="float-end">
-                                            <button class="btn btn-sm btn-primary" @onclick="() => EditEntry(entry)">Edit</button>
+                                            <button class="btn btn-sm btn-primary me-2" @onclick="() => EditEntry(entry)">Edit</button>
+                                            <button class="btn btn-sm btn-danger" @onclick="() => DeleteEntry(entry)" disabled="@isDeleting">
+                                                @if (isDeleting && deletingEntryId == entry.Id)
+                                                {
+                                                    <span class="spinner-border spinner-border-sm me-1"></span>
+                                                }
+                                                Delete
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
@@ -332,6 +308,8 @@ else
     private bool showEditor = false;
     private bool showPinPrompt = false;
     private bool isSaving = false;
+    private bool isDeleting = false;
+    private int? deletingEntryId = null;
     private DateTime selectedDate = DateTime.Today;
     private int currentPage = 1;
     private int pageSize = 10;
@@ -344,6 +322,8 @@ else
     private DateTime? filterEndDate;
     private string filterMood = string.Empty;
     private int? filterTagId;
+    private string filterTagIdString = string.Empty;
+    private bool filtersActive = false;
 
     // Tags and Moods
     private List<Tag> availableTags = new();
@@ -385,6 +365,23 @@ else
                 }
                 else
                 {
+                    // Do not allow creating new entries for past or future dates
+                    if (parsedDate.Date != DateTime.Today)
+                    {
+                        await JSRuntime.InvokeVoidAsync("alert", "You can only create new entries for today's date. Past or future dates are not allowed.");
+                        Navigation.NavigateTo("/journal");
+                        return;
+                    }
+
+                    // Check if an entry already exists for today
+                    var existingEntryForToday = await JournalService.GetEntryByDateAsync(AuthService.CurrentUser!.Id, parsedDate);
+                    if (existingEntryForToday != null)
+                    {
+                        await JSRuntime.InvokeVoidAsync("alert", "An entry already exists for today. You can only create one entry per day. Opening existing entry for editing.");
+                        await EditEntry(existingEntryForToday);
+                        return;
+                    }
+
                     entryModel = new EntryModel
                     {
                         EntryDate = parsedDate.Date,
@@ -448,11 +445,24 @@ else
         entries = await JournalService.GetEntriesAsync(AuthService.CurrentUser.Id, (currentPage - 1) * pageSize, pageSize);
     }
 
-    private async Task ApplyFilters()
+    private async Task SearchEntries()
     {
         if (AuthService.CurrentUser == null) return;
 
         currentPage = 1;
+        filtersActive = HasActiveFilters();
+
+        // Get total count for pagination with filters
+        totalEntries = await JournalService.SearchEntriesCountAsync(
+            AuthService.CurrentUser.Id,
+            string.IsNullOrWhiteSpace(searchTerm) ? null : searchTerm,
+            filterStartDate,
+            filterEndDate,
+            string.IsNullOrWhiteSpace(filterMood) ? null : filterMood,
+            filterTagId
+        );
+        totalPages = Math.Max(1, (int)Math.Ceiling(totalEntries / (double)pageSize));
+
         entries = await JournalService.SearchEntriesAsync(
             AuthService.CurrentUser.Id,
             string.IsNullOrWhiteSpace(searchTerm) ? null : searchTerm,
@@ -463,8 +473,45 @@ else
             (currentPage - 1) * pageSize,
             pageSize
         );
-        totalEntries = entries.Count;
-        totalPages = (int)Math.Ceiling(totalEntries / (double)pageSize);
+
+        StateHasChanged();
+    }
+
+    private bool HasActiveFilters()
+    {
+        return !string.IsNullOrWhiteSpace(searchTerm) || 
+               filterStartDate.HasValue || 
+               filterEndDate.HasValue || 
+               !string.IsNullOrWhiteSpace(filterMood) || 
+               filterTagId.HasValue;
+    }
+
+    private void OnTagFilterChanged(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString();
+        if (string.IsNullOrWhiteSpace(value) || !int.TryParse(value, out int tagId))
+        {
+            filterTagId = null;
+            filterTagIdString = string.Empty;
+        }
+        else
+        {
+            filterTagId = tagId;
+            filterTagIdString = value;
+        }
+    }
+
+    private async Task ApplyFilters()
+    {
+        await SearchEntries();
+    }
+
+    private async Task HandleSearchKeyPress(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SearchEntries();
+        }
     }
 
     private async Task ClearFilters()
@@ -474,13 +521,29 @@ else
         filterEndDate = null;
         filterMood = string.Empty;
         filterTagId = null;
+        filterTagIdString = string.Empty;
+        filtersActive = false;
         currentPage = 1;
         await LoadEntries();
     }
 
-    private void CreateNewEntry()
+    private async Task CreateNewEntry()
     {
+        if (AuthService.CurrentUser == null) return;
+
         selectedDate = DateTime.Today;
+
+        // Enforce a single entry per user per day:
+        // Check if an entry already exists for today
+        var existingEntry = await JournalService.GetEntryByDateAsync(AuthService.CurrentUser.Id, selectedDate);
+        if (existingEntry != null)
+        {
+            // Show error message and open the existing entry for editing
+            await JSRuntime.InvokeVoidAsync("alert", "An entry already exists for today. You can only create one entry per day. Opening existing entry for editing.");
+            await EditEntry(existingEntry);
+            return;
+        }
+
         currentEntry = null;
         entryModel = new EntryModel
         {
@@ -556,6 +619,30 @@ else
                 return;
             }
 
+            // Enforce date rule: new entries can only be created for today's date
+            var today = DateTime.Today;
+            if (currentEntry == null)
+            {
+                // Check if entry date is today
+                if (entryModel.EntryDate.Date != today)
+                {
+                    saveErrorMessage = "New entries can only be created for today's date. Past or future dates are not allowed.";
+                    isSaving = false;
+                    StateHasChanged();
+                    return;
+                }
+
+                // Check if an entry already exists for today (prevent duplicate entries)
+                var existingEntry = await JournalService.GetEntryByDateAsync(AuthService.CurrentUser.Id, today);
+                if (existingEntry != null)
+                {
+                    saveErrorMessage = "An entry already exists for today. You can only create one entry per day. Please edit the existing entry instead.";
+                    isSaving = false;
+                    StateHasChanged();
+                    return;
+                }
+            }
+
             // Update word count before saving
             entryModel.WordCount = CountWords(entryModel.Content);
 
@@ -612,20 +699,50 @@ else
         }
     }
 
-    private async Task ChangePage(int page)
+    private async Task DeleteEntry(JournalEntry entry)
     {
-        if (page >= 1 && page <= totalPages)
+        if (AuthService.CurrentUser == null) return;
+
+        if (!await JSRuntime.InvokeAsync<bool>("confirm", $"Are you sure you want to delete the entry '{entry.Title}'? This action cannot be undone."))
         {
-            currentPage = page;
-            if (string.IsNullOrWhiteSpace(searchTerm) && !filterStartDate.HasValue && !filterEndDate.HasValue && 
-                string.IsNullOrWhiteSpace(filterMood) && !filterTagId.HasValue)
+            return;
+        }
+
+        isDeleting = true;
+        deletingEntryId = entry.Id;
+        StateHasChanged();
+
+        try
+        {
+            var success = await JournalService.DeleteEntryAsync(entry.Id, AuthService.CurrentUser.Id);
+            if (success)
             {
                 await LoadEntries();
             }
             else
             {
-                await ApplyFilters();
+                await JSRuntime.InvokeVoidAsync("alert", "Failed to delete entry. Please try again.");
             }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("alert", $"Error deleting entry: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"Error deleting entry: {ex.Message}");
+        }
+        finally
+        {
+            isDeleting = false;
+            deletingEntryId = null;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ChangePage(int page)
+    {
+        if (page >= 1 && page <= totalPages)
+        {
+            currentPage = page;
+            await LoadEntries();
         }
     }
 
