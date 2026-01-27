@@ -7,6 +7,7 @@
 @using N_Journal_Tumyanghang_Lawoti.Models
 @using Microsoft.Maui.Storage
 @using System.IO
+@using System.Linq
 
 <PageTitle>Dashboard - N-Journal</PageTitle>
 
@@ -51,61 +52,108 @@ else
             </div>
         </div>
 
-        <!-- Mood Distribution -->
+        <!-- Mood Distribution Charts -->
         <div class="row mb-4">
+            <!-- Mood Distribution Pie Chart -->
             <div class="col-md-6">
                 <div class="card">
                     <div class="card-header">
-                        <h5>Mood Distribution</h5>
+                        <h5><span class="bi bi-pie-chart me-2"></span>Mood Distribution</h5>
                     </div>
                     <div class="card-body">
-                        @if (moodDistribution.Any())
+                        @if (moodCategoryDistribution.Any())
                         {
-                            var totalMoods = moodDistribution.Values.Sum();
-                            @foreach (var mood in moodDistribution.OrderByDescending(m => m.Value))
-                            {
-                                var percentage = (mood.Value / (double)totalMoods) * 100;
-                                <div class="mb-3">
-                                    <div class="d-flex justify-content-between mb-1">
-                                        <span><strong>@mood.Key</strong></span>
-                                        <span>@mood.Value (@percentage.ToString("F1"))%</span>
-                                    </div>
-                                    <div class="progress" style="height: 20px;">
-                                        <div class="progress-bar" role="progressbar" style="width: @percentage%">
+                            var totalMoods = moodCategoryDistribution.Values.Sum();
+                            <div class="chart-container">
+                                <svg class="pie-chart" viewBox="0 0 200 200">
+                                    @{
+                                        double currentAngle = -90;
+                                        var colors = new Dictionary<string, string>
+                                        {
+                                            { "Positive", "#28a745" },
+                                            { "Neutral", "#ffc107" },
+                                            { "Negative", "#dc3545" }
+                                        };
+                                    }
+                                    @foreach (var category in moodCategoryDistribution.OrderByDescending(m => m.Value))
+                                    {
+                                        var percentage = totalMoods > 0 ? (category.Value / (double)totalMoods) * 100 : 0;
+                                        var angle = (percentage / 100) * 360;
+                                        var largeArcFlag = angle > 180 ? 1 : 0;
+                                        
+                                        var x1 = 100 + 80 * Math.Cos(currentAngle * Math.PI / 180);
+                                        var y1 = 100 + 80 * Math.Sin(currentAngle * Math.PI / 180);
+                                        var x2 = 100 + 80 * Math.Cos((currentAngle + angle) * Math.PI / 180);
+                                        var y2 = 100 + 80 * Math.Sin((currentAngle + angle) * Math.PI / 180);
+                                        
+                                        <path d="M 100 100 L @x1 @y1 A 80 80 0 @largeArcFlag 1 @x2 @y2 Z"
+                                              fill="@colors.GetValueOrDefault(category.Key, "#6c757d")"
+                                              stroke="white"
+                                              stroke-width="2"
+                                              class="pie-segment"
+                                              data-category="@category.Key"
+                                              data-percentage="@percentage.ToString("F1")" />
+                                        currentAngle += angle;
+                                    }
+                                    <circle cx="100" cy="100" r="50" fill="white" />
+                                    <text x="100" y="95" text-anchor="middle" class="pie-center-text" font-size="14" font-weight="bold">Total</text>
+                                    <text x="100" y="110" text-anchor="middle" class="pie-center-text" font-size="12">@totalMoods</text>
+                                </svg>
+                                <div class="pie-legend">
+                                    @foreach (var category in moodCategoryDistribution.OrderByDescending(m => m.Value))
+                                    {
+                                        var percentage = totalMoods > 0 ? (category.Value / (double)totalMoods) * 100 : 0;
+                                        <div class="legend-item">
+                                            <span class="legend-color" style="background-color: @colors.GetValueOrDefault(category.Key, "#6c757d");"></span>
+                                            <span class="legend-label">@category.Key</span>
+                                            <span class="legend-value">@category.Value (@percentage.ToString("F1")%)</span>
                                         </div>
-                                    </div>
+                                    }
                                 </div>
-                            }
+                            </div>
                         }
                         else
                         {
-                            <p class="text-muted">No mood data available</p>
+                            <p class="text-muted text-center py-4">No mood data available</p>
                         }
                     </div>
                 </div>
             </div>
 
-            <!-- Most Frequent Moods -->
+            <!-- Mood Distribution Bar Chart -->
             <div class="col-md-6">
                 <div class="card">
                     <div class="card-header">
-                        <h5>Most Frequent Moods</h5>
+                        <h5><span class="bi bi-bar-chart me-2"></span>Mood Distribution (Bar Chart)</h5>
                     </div>
                     <div class="card-body">
-                        @if (moodDistribution.Any())
+                        @if (moodCategoryDistribution.Any())
                         {
-                            <ol>
-                                @foreach (var mood in moodDistribution.OrderByDescending(m => m.Value).Take(5))
+                            var totalMoods = moodCategoryDistribution.Values.Sum();
+                            var maxValue = moodCategoryDistribution.Values.Max();
+                            <div class="bar-chart-container">
+                                @foreach (var category in moodCategoryDistribution.OrderByDescending(m => m.Value))
                                 {
-                                    <li class="mb-2">
-                                        <strong>@mood.Key</strong> - @mood.Value time(s)
-                                    </li>
+                                    var percentage = totalMoods > 0 ? (category.Value / (double)totalMoods) * 100 : 0;
+                                    var barWidth = maxValue > 0 ? (category.Value / (double)maxValue) * 100 : 0;
+                                    var color = category.Key == "Positive" ? "#28a745" : 
+                                               category.Key == "Neutral" ? "#ffc107" : "#dc3545";
+                                    
+                                    <div class="bar-chart-item">
+                                        <div class="bar-label">@category.Key</div>
+                                        <div class="bar-wrapper">
+                                            <div class="bar" style="width: @barWidth%; background-color: @color;">
+                                                <span class="bar-value">@category.Value</span>
+                                            </div>
+                                        </div>
+                                        <div class="bar-percentage">@percentage.ToString("F1")%</div>
+                                    </div>
                                 }
-                            </ol>
+                            </div>
                         }
                         else
                         {
-                            <p class="text-muted">No mood data available</p>
+                            <p class="text-muted text-center py-4">No mood data available</p>
                         }
                     </div>
                 </div>
@@ -114,59 +162,77 @@ else
 
         <!-- Tag Analytics -->
         <div class="row mb-4">
+            <!-- Most Used Tags Bar Chart -->
             <div class="col-md-6">
                 <div class="card">
                     <div class="card-header">
-                        <h5>Most Used Tags</h5>
+                        <h5><span class="bi bi-bar-chart-fill me-2"></span>Most Used Tags (Bar Chart)</h5>
                     </div>
                     <div class="card-body">
                         @if (tagUsage.Any())
                         {
-                            <ol>
-                                @foreach (var tag in tagUsage.OrderByDescending(t => t.Value).Take(10))
+                            var topTags = tagUsage.OrderByDescending(t => t.Value).Take(10).ToList();
+                            var maxValue = topTags.Any() ? topTags.Max(t => t.Value) : 1;
+                            <div class="tag-bar-chart">
+                                @foreach (var tag in topTags)
                                 {
-                                    <li class="mb-2">
-                                        <strong>@tag.Key</strong> - @tag.Value time(s)
-                                    </li>
+                                    var barWidth = maxValue > 0 ? (tag.Value / (double)maxValue) * 100 : 0;
+                                    var totalTags = tagUsage.Values.Sum();
+                                    var percentage = totalTags > 0 ? (tag.Value / (double)totalTags) * 100 : 0;
+                                    
+                                    <div class="tag-bar-item">
+                                        <div class="tag-bar-label">@tag.Key</div>
+                                        <div class="tag-bar-wrapper">
+                                            <div class="tag-bar" style="width: @barWidth%;">
+                                                <span class="tag-bar-value">@tag.Value</span>
+                                            </div>
+                                        </div>
+                                        <div class="tag-bar-percentage">@percentage.ToString("F1")%</div>
+                                    </div>
                                 }
-                            </ol>
+                            </div>
                         }
                         else
                         {
-                            <p class="text-muted">No tag data available</p>
+                            <p class="text-muted text-center py-4">No tag data available</p>
                         }
                     </div>
                 </div>
             </div>
 
-            <!-- Tag Breakdown -->
+            <!-- Tag Word Cloud -->
             <div class="col-md-6">
                 <div class="card">
                     <div class="card-header">
-                        <h5>Tag Breakdown</h5>
+                        <h5><span class="bi bi-cloud-fill me-2"></span>Tag Word Cloud</h5>
                     </div>
                     <div class="card-body">
                         @if (tagUsage.Any())
                         {
-                            var totalTags = tagUsage.Values.Sum();
-                            @foreach (var tag in tagUsage.OrderByDescending(t => t.Value).Take(10))
-                            {
-                                var percentage = (tag.Value / (double)totalTags) * 100;
-                                <div class="mb-2">
-                                    <div class="d-flex justify-content-between">
-                                        <span>@tag.Key</span>
-                                        <span>@tag.Value (@percentage.ToString("F1"))%</span>
-                                    </div>
-                                    <div class="progress" style="height: 15px;">
-                                        <div class="progress-bar bg-info" role="progressbar" style="width: @percentage%">
-                                        </div>
-                                    </div>
-                                </div>
-                            }
+                            var topTags = tagUsage.OrderByDescending(t => t.Value).Take(20).ToList();
+                            var maxValue = topTags.Any() ? topTags.Max(t => t.Value) : 1;
+                            var minValue = topTags.Any() ? topTags.Min(t => t.Value) : 1;
+                            var sizeRange = maxValue - minValue;
+                            
+                            <div class="word-cloud">
+                                @foreach (var tag in topTags)
+                                {
+                                    // Calculate font size based on frequency (between 0.8rem and 2rem)
+                                    var normalizedValue = sizeRange > 0 ? (tag.Value - minValue) / (double)sizeRange : 0.5;
+                                    var fontSize = 0.8 + (normalizedValue * 1.2); // 0.8rem to 2rem
+                                    var opacity = 0.6 + (normalizedValue * 0.4); // 0.6 to 1.0
+                                    
+                                    <span class="word-cloud-item" 
+                                          style="font-size: @fontSize.ToString("F2")rem; opacity: @opacity.ToString("F2");"
+                                          title="@tag.Key: @tag.Value time(s)">
+                                        @tag.Key
+                                    </span>
+                                }
+                            </div>
                         }
                         else
                         {
-                            <p class="text-muted">No tag data available</p>
+                            <p class="text-muted text-center py-4">No tag data available</p>
                         }
                     </div>
                 </div>
@@ -278,12 +344,256 @@ else
     </div>
 }
 
+<style>
+    /* Pie Chart Styles */
+    .chart-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1.5rem;
+    }
+
+    .pie-chart {
+        width: 100%;
+        max-width: 250px;
+        height: 250px;
+    }
+
+    .pie-segment {
+        transition: opacity 0.3s;
+        cursor: pointer;
+    }
+
+    .pie-segment:hover {
+        opacity: 0.8;
+    }
+
+    .pie-center-text {
+        fill: #495057;
+    }
+
+    .pie-legend {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        width: 100%;
+    }
+
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.5rem;
+        background-color: #f8f9fa;
+        border-radius: 6px;
+        transition: background-color 0.2s;
+    }
+
+    .legend-item:hover {
+        background-color: #e9ecef;
+    }
+
+    .legend-color {
+        width: 20px;
+        height: 20px;
+        border-radius: 4px;
+        flex-shrink: 0;
+    }
+
+    .legend-label {
+        flex: 1;
+        font-weight: 600;
+        color: #495057;
+    }
+
+    .legend-value {
+        font-weight: 500;
+        color: #6c757d;
+    }
+
+    /* Bar Chart Styles */
+    .bar-chart-container {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        padding: 1rem 0;
+    }
+
+    .bar-chart-item {
+        display: grid;
+        grid-template-columns: 100px 1fr 60px;
+        gap: 0.75rem;
+        align-items: center;
+    }
+
+    .bar-label {
+        font-weight: 600;
+        color: #495057;
+        font-size: 0.9rem;
+    }
+
+    .bar-wrapper {
+        position: relative;
+        height: 30px;
+        background-color: #e9ecef;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+
+    .bar {
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        padding-right: 0.5rem;
+        border-radius: 4px;
+        transition: width 0.5s ease;
+        min-width: 40px;
+    }
+
+    .bar-value {
+        color: white;
+        font-weight: 600;
+        font-size: 0.85rem;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    }
+
+    .bar-percentage {
+        text-align: right;
+        font-weight: 500;
+        color: #6c757d;
+        font-size: 0.85rem;
+    }
+
+    /* Tag Bar Chart Styles */
+    .tag-bar-chart {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        padding: 1rem 0;
+    }
+
+    .tag-bar-item {
+        display: grid;
+        grid-template-columns: 120px 1fr 60px;
+        gap: 0.75rem;
+        align-items: center;
+    }
+
+    .tag-bar-label {
+        font-weight: 600;
+        color: #495057;
+        font-size: 0.9rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .tag-bar-wrapper {
+        position: relative;
+        height: 28px;
+        background-color: #e9ecef;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+
+    .tag-bar {
+        height: 100%;
+        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        padding-right: 0.5rem;
+        border-radius: 4px;
+        transition: width 0.5s ease;
+        min-width: 35px;
+    }
+
+    .tag-bar-value {
+        color: white;
+        font-weight: 600;
+        font-size: 0.8rem;
+        text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    }
+
+    .tag-bar-percentage {
+        text-align: right;
+        font-weight: 500;
+        color: #6c757d;
+        font-size: 0.85rem;
+    }
+
+    /* Word Cloud Styles */
+    .word-cloud {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        padding: 1.5rem;
+        justify-content: center;
+        align-items: center;
+        min-height: 200px;
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-radius: 8px;
+    }
+
+    .word-cloud-item {
+        display: inline-block;
+        padding: 0.5rem 0.75rem;
+        margin: 0.25rem;
+        color: #495057;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        border-radius: 6px;
+        background-color: rgba(255, 255, 255, 0.7);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .word-cloud-item:hover {
+        transform: scale(1.1);
+        background-color: rgba(102, 126, 234, 0.1);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        z-index: 10;
+        position: relative;
+    }
+
+    /* Responsive adjustments */
+    @@media (max-width: 768px) {
+        .bar-chart-item,
+        .tag-bar-item {
+            grid-template-columns: 80px 1fr 50px;
+            gap: 0.5rem;
+        }
+
+        .bar-label,
+        .tag-bar-label {
+            font-size: 0.8rem;
+        }
+
+        .word-cloud {
+            padding: 1rem;
+            min-height: 150px;
+        }
+
+        .word-cloud-item {
+            font-size: 0.9rem !important;
+            padding: 0.4rem 0.6rem;
+        }
+    }
+</style>
+
 @code {
     private Streak streakInfo = new();
     private int missedDays = 0;
     private Dictionary<string, int> moodDistribution = new();
+    private Dictionary<string, int> moodCategoryDistribution = new();
     private Dictionary<string, int> tagUsage = new();
     private List<(DateTime Date, int WordCount)> wordCountTrends = new();
+    
+    // Mood categorization as per requirements
+    private readonly List<string> positiveMoods = new() { "Happy", "Excited", "Relaxed", "Grateful", "Confident" };
+    private readonly List<string> neutralMoods = new() { "Calm", "Thoughtful", "Curious", "Nostalgic", "Bored" };
+    private readonly List<string> negativeMoods = new() { "Sad", "Angry", "Stressed", "Lonely", "Anxious" };
     private DateTime? exportStartDate = DateTime.Today.AddDays(-30);
     private DateTime? exportEndDate = DateTime.Today;
     private string exportFileName = "journal_export";
@@ -307,6 +617,38 @@ else
 
         // Load mood distribution
         moodDistribution = await JournalService.GetMoodDistributionAsync(AuthService.CurrentUser.Id);
+        
+        // Categorize moods into Positive, Neutral, Negative
+        moodCategoryDistribution = new Dictionary<string, int>
+        {
+            { "Positive", 0 },
+            { "Neutral", 0 },
+            { "Negative", 0 }
+        };
+        
+        foreach (var mood in moodDistribution)
+        {
+            if (positiveMoods.Contains(mood.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                moodCategoryDistribution["Positive"] += mood.Value;
+            }
+            else if (neutralMoods.Contains(mood.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                moodCategoryDistribution["Neutral"] += mood.Value;
+            }
+            else if (negativeMoods.Contains(mood.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                moodCategoryDistribution["Negative"] += mood.Value;
+            }
+            else
+            {
+                // Default to neutral for unknown moods
+                moodCategoryDistribution["Neutral"] += mood.Value;
+            }
+        }
+        
+        // Remove categories with zero values for cleaner display
+        moodCategoryDistribution = moodCategoryDistribution.Where(kvp => kvp.Value > 0).ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
 
         // Load tag usage
         tagUsage = await JournalService.GetTagUsageAsync(AuthService.CurrentUser.Id);

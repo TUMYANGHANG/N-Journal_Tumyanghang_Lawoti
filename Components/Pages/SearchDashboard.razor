@@ -5,6 +5,7 @@
 @inject IJSRuntime JSRuntime
 @using N_Journal_Tumyanghang_Lawoti.Models
 @using Markdig
+@using System.Linq
 
 <PageTitle>Search Dashboard - N-Journal</PageTitle>
 
@@ -53,7 +54,8 @@ else
                                           placeholder="Search in titles and content..." 
                                           @onkeypress="HandleSearchKeyPress" />
                                 <button class="btn btn-primary search-btn" type="button" @onclick="SearchEntries" title="Search">
-                                    <span class="bi bi-search"></span>
+                                    <span class="bi bi-search search-icon"></span>
+                                    <span class="search-text">Search</span>
                                 </button>
                             </div>
                         </div>
@@ -68,28 +70,28 @@ else
                                     {
                                         <span class="badge bg-primary filter-chip">
                                             <span class="bi bi-search me-1"></span>@searchTerm
-                                            <button type="button" class="btn-close btn-close-white ms-2" style="font-size: 0.7em;" @onclick="() => { searchTerm = string.Empty; ApplyFilters(); }"></button>
+                                            <button type="button" class="btn-close btn-close-white ms-2" style="font-size: 0.7em;" @onclick="async () => { searchTerm = string.Empty; await ApplyFilters(); }"></button>
                                         </span>
                                     }
                                     @if (filterStartDate.HasValue)
                                     {
                                         <span class="badge bg-info filter-chip">
                                             <span class="bi bi-calendar-event me-1"></span>From: @filterStartDate.Value.ToString("MMM dd")
-                                            <button type="button" class="btn-close btn-close-white ms-2" style="font-size: 0.7em;" @onclick="() => { filterStartDate = null; ApplyFilters(); }"></button>
+                                            <button type="button" class="btn-close btn-close-white ms-2" style="font-size: 0.7em;" @onclick="async () => { filterStartDate = null; await ApplyFilters(); }"></button>
                                         </span>
                                     }
                                     @if (filterEndDate.HasValue)
                                     {
                                         <span class="badge bg-info filter-chip">
                                             <span class="bi bi-calendar-event me-1"></span>To: @filterEndDate.Value.ToString("MMM dd")
-                                            <button type="button" class="btn-close btn-close-white ms-2" style="font-size: 0.7em;" @onclick="() => { filterEndDate = null; ApplyFilters(); }"></button>
+                                            <button type="button" class="btn-close btn-close-white ms-2" style="font-size: 0.7em;" @onclick="async () => { filterEndDate = null; await ApplyFilters(); }"></button>
                                         </span>
                                     }
                                     @if (!string.IsNullOrWhiteSpace(filterMood))
                                     {
                                         <span class="badge bg-success filter-chip">
                                             <span class="bi bi-emoji-smile me-1"></span>@filterMood
-                                            <button type="button" class="btn-close btn-close-white ms-2" style="font-size: 0.7em;" @onclick="() => { filterMood = string.Empty; ApplyFilters(); }"></button>
+                                            <button type="button" class="btn-close btn-close-white ms-2" style="font-size: 0.7em;" @onclick="async () => { filterMood = string.Empty; await ApplyFilters(); }"></button>
                                         </span>
                                     }
                                     @if (filterTagId.HasValue)
@@ -97,7 +99,7 @@ else
                                         var selectedTag = availableTags.FirstOrDefault(t => t.Id == filterTagId.Value);
                                         <span class="badge filter-chip" style="background-color: @(selectedTag?.Color ?? "#6c757d");">
                                             <span class="bi bi-tag me-1"></span>@(selectedTag?.Name ?? "Tag")
-                                            <button type="button" class="btn-close btn-close-white ms-2" style="font-size: 0.7em;" @onclick="() => { filterTagId = null; filterTagIdString = string.Empty; ApplyFilters(); }"></button>
+                                            <button type="button" class="btn-close btn-close-white ms-2" style="font-size: 0.7em;" @onclick="async () => { filterTagId = null; filterTagIdString = string.Empty; await ApplyFilters(); }"></button>
                                         </span>
                                     }
                                 </div>
@@ -140,13 +142,27 @@ else
                                 <span class="input-group-text bg-white border-end-0">
                                     <span class="bi bi-emoji-smile text-muted"></span>
                                 </span>
-                                <InputSelect class="form-control border-start-0 ps-0" @bind-Value="filterMood">
-                                    <option value="">All Moods</option>
-                                    @foreach (var mood in availableMoods)
+                            <InputSelect class="form-control border-start-0 ps-0" @bind-Value="filterMood">
+                                <option value="">All Moods</option>
+                                <optgroup label="😊 Positive">
+                                    @foreach (var mood in positiveMoods)
                                     {
                                         <option value="@mood">@mood</option>
                                     }
-                                </InputSelect>
+                                </optgroup>
+                                <optgroup label="😐 Neutral">
+                                    @foreach (var mood in neutralMoods)
+                                    {
+                                        <option value="@mood">@mood</option>
+                                    }
+                                </optgroup>
+                                <optgroup label="😔 Negative">
+                                    @foreach (var mood in negativeMoods)
+                                    {
+                                        <option value="@mood">@mood</option>
+                                    }
+                                </optgroup>
+                            </InputSelect>
                             </div>
                         </div>
 
@@ -473,7 +489,51 @@ else
 
     .search-btn {
         border-left: none;
-        padding: 0.5rem 1rem;
+        padding: 0.75rem 1.25rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        min-width: 100px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+        box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
+    }
+
+    .search-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(102, 126, 234, 0.4);
+        background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+    }
+
+    .search-btn:active {
+        transform: translateY(0);
+        box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
+    }
+
+    .search-icon {
+        font-size: 1.1rem;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    .search-text {
+        font-size: 0.95rem;
+        letter-spacing: 0.3px;
+    }
+
+    /* Hide search text on smaller screens */
+    @@media (max-width: 576px) {
+        .search-text {
+            display: none;
+        }
+        
+        .search-btn {
+            min-width: 50px;
+            padding: 0.75rem;
+        }
     }
 
     .filter-actions {
@@ -583,7 +643,12 @@ else
 @code {
     private List<JournalEntry> entries = new();
     private List<Tag> availableTags = new();
-    private List<string> availableMoods = new() { "Happy", "Sad", "Angry", "Anxious", "Excited", "Calm", "Tired", "Energetic", "Grateful", "Frustrated", "Content", "Lonely" };
+    
+    // Mood categories as per requirements
+    private readonly List<string> positiveMoods = new() { "Happy", "Excited", "Relaxed", "Grateful", "Confident" };
+    private readonly List<string> neutralMoods = new() { "Calm", "Thoughtful", "Curious", "Nostalgic", "Bored" };
+    private readonly List<string> negativeMoods = new() { "Sad", "Angry", "Stressed", "Lonely", "Anxious" };
+    private List<string> availableMoods = new();
 
     // Filters
     private string searchTerm = string.Empty;
@@ -607,6 +672,9 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        // Initialize available moods from all categories
+        availableMoods = positiveMoods.Concat(neutralMoods).Concat(negativeMoods).OrderBy(m => m).ToList();
+        
         if (AuthService.CurrentUser != null)
         {
             await LoadData();

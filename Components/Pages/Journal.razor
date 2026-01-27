@@ -6,6 +6,7 @@
 @inject NavigationManager Navigation
 @inject IJSRuntime JSRuntime
 @using N_Journal_Tumyanghang_Lawoti.Models
+@using System.Linq
 @using Markdig
 @using Microsoft.AspNetCore.Components
 
@@ -73,53 +74,125 @@ else
                                     <label class="form-label">Primary Mood *</label>
                                     <InputSelect class="form-control" @bind-Value="entryModel.PrimaryMood">
                                         <option value="">Select Mood</option>
-                                        @foreach (var mood in availableMoods)
-                                        {
-                                            <option value="@mood">@mood</option>
-                                        }
+                                        <optgroup label="😊 Positive">
+                                            @foreach (var mood in positiveMoods)
+                                            {
+                                                <option value="@mood">@mood</option>
+                                            }
+                                        </optgroup>
+                                        <optgroup label="😐 Neutral">
+                                            @foreach (var mood in neutralMoods)
+                                            {
+                                                <option value="@mood">@mood</option>
+                                            }
+                                        </optgroup>
+                                        <optgroup label="😔 Negative">
+                                            @foreach (var mood in negativeMoods)
+                                            {
+                                                <option value="@mood">@mood</option>
+                                            }
+                                        </optgroup>
                                     </InputSelect>
                                     <ValidationMessage For="@(() => entryModel.PrimaryMood)" />
                                 </div>
 
                                 <div class="row mb-3">
                                     <div class="col-md-6">
-                                        <label class="form-label">Secondary Mood 1</label>
+                                        <label class="form-label">Secondary Mood 1 (Optional)</label>
                                         <InputSelect class="form-control" @bind-Value="entryModel.SecondaryMood1">
                                             <option value="">None</option>
-                                            @foreach (var mood in availableMoods)
-                                            {
-                                                <option value="@mood">@mood</option>
-                                            }
+                                            <optgroup label="😊 Positive">
+                                                @foreach (var mood in positiveMoods)
+                                                {
+                                                    <option value="@mood">@mood</option>
+                                                }
+                                            </optgroup>
+                                            <optgroup label="😐 Neutral">
+                                                @foreach (var mood in neutralMoods)
+                                                {
+                                                    <option value="@mood">@mood</option>
+                                                }
+                                            </optgroup>
+                                            <optgroup label="😔 Negative">
+                                                @foreach (var mood in negativeMoods)
+                                                {
+                                                    <option value="@mood">@mood</option>
+                                                }
+                                            </optgroup>
                                         </InputSelect>
                                     </div>
                                     <div class="col-md-6">
-                                        <label class="form-label">Secondary Mood 2</label>
+                                        <label class="form-label">Secondary Mood 2 (Optional)</label>
                                         <InputSelect class="form-control" @bind-Value="entryModel.SecondaryMood2">
                                             <option value="">None</option>
-                                            @foreach (var mood in availableMoods)
-                                            {
-                                                <option value="@mood">@mood</option>
-                                            }
+                                            <optgroup label="😊 Positive">
+                                                @foreach (var mood in positiveMoods)
+                                                {
+                                                    <option value="@mood">@mood</option>
+                                                }
+                                            </optgroup>
+                                            <optgroup label="😐 Neutral">
+                                                @foreach (var mood in neutralMoods)
+                                                {
+                                                    <option value="@mood">@mood</option>
+                                                }
+                                            </optgroup>
+                                            <optgroup label="😔 Negative">
+                                                @foreach (var mood in negativeMoods)
+                                                {
+                                                    <option value="@mood">@mood</option>
+                                                }
+                                            </optgroup>
                                         </InputSelect>
                                     </div>
                                 </div>
 
                                 <div class="mb-3">
-                                    <label class="form-label">Tags</label>
-                                    <div class="d-flex flex-wrap gap-2 mb-2">
-                                        @foreach (var tag in availableTags)
-                                        {
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" 
-                                                       checked="@entryModel.SelectedTagIds.Contains(tag.Id)"
-                                                       @onchange="@((e) => ToggleTag(tag.Id, (bool)e.Value!))" />
-                                                <label class="form-check-label" style="color: @tag.Color;">
-                                                    @tag.Name
-                                                </label>
+                                    <label class="form-label">Tags (Optional)</label>
+                                    
+                                    @if (preBuiltTags.Any())
+                                    {
+                                        <div class="mb-3">
+                                            <small class="text-muted fw-semibold d-block mb-2">Pre-built Tags:</small>
+                                            <div class="d-flex flex-wrap gap-2">
+                                                @foreach (var tag in preBuiltTags)
+                                                {
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" 
+                                                               checked="@entryModel.SelectedTagIds.Contains(tag.Id)"
+                                                               @onchange="@((e) => ToggleTag(tag.Id, (bool)e.Value!))" />
+                                                        <label class="form-check-label" style="color: @tag.Color;">
+                                                            @tag.Name
+                                                        </label>
+                                                    </div>
+                                                }
                                             </div>
-                                        }
-                                    </div>
-                                    <button type="button" class="btn btn-sm btn-outline-primary" @onclick="ShowCreateTagModal">+ Create New Tag</button>
+                                        </div>
+                                    }
+                                    
+                                    @if (customTags.Any())
+                                    {
+                                        <div class="mb-3">
+                                            <small class="text-muted fw-semibold d-block mb-2">Custom Tags:</small>
+                                            <div class="d-flex flex-wrap gap-2">
+                                                @foreach (var tag in customTags)
+                                                {
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" 
+                                                               checked="@entryModel.SelectedTagIds.Contains(tag.Id)"
+                                                               @onchange="@((e) => ToggleTag(tag.Id, (bool)e.Value!))" />
+                                                        <label class="form-check-label" style="color: @tag.Color;">
+                                                            @tag.Name
+                                                        </label>
+                                                    </div>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                                    
+                                    <button type="button" class="btn btn-sm btn-outline-primary" @onclick="ShowCreateTagModal">
+                                        <span class="bi bi-plus-circle me-1"></span>Create New Tag
+                                    </button>
                                 </div>
 
                                 <div class="mb-3">
@@ -327,7 +400,13 @@ else
 
     // Tags and Moods
     private List<Tag> availableTags = new();
-    private List<string> availableMoods = new() { "Happy", "Sad", "Angry", "Anxious", "Excited", "Calm", "Tired", "Energetic", "Grateful", "Frustrated", "Content", "Lonely" };
+    private List<Tag> preBuiltTags = new();
+    private List<Tag> customTags = new();
+    // Mood categories as per requirements
+    private readonly List<string> positiveMoods = new() { "Happy", "Excited", "Relaxed", "Grateful", "Confident" };
+    private readonly List<string> neutralMoods = new() { "Calm", "Thoughtful", "Curious", "Nostalgic", "Bored" };
+    private readonly List<string> negativeMoods = new() { "Sad", "Angry", "Stressed", "Lonely", "Anxious" };
+    private List<string> availableMoods = new();
 
     // Entry Model
     private EntryModel entryModel = new();
@@ -349,6 +428,9 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        // Initialize available moods from all categories
+        availableMoods = positiveMoods.Concat(neutralMoods).Concat(negativeMoods).OrderBy(m => m).ToList();
+        
         await CheckPinRequirement();
         if (!showPinPrompt)
         {
@@ -432,6 +514,8 @@ else
         if (AuthService.CurrentUser == null) return;
 
         availableTags = await JournalService.GetTagsAsync(AuthService.CurrentUser.Id);
+        preBuiltTags = availableTags.Where(t => t.IsPreBuilt).OrderBy(t => t.Name).ToList();
+        customTags = availableTags.Where(t => !t.IsPreBuilt).OrderBy(t => t.Name).ToList();
         await LoadEntries();
     }
 
@@ -776,6 +860,8 @@ else
 
         var tag = await JournalService.CreateTagAsync(AuthService.CurrentUser.Id, newTagName, newTagColor, false);
         availableTags.Add(tag);
+        customTags.Add(tag);
+        customTags = customTags.OrderBy(t => t.Name).ToList();
         showTagModal = false;
     }
 
